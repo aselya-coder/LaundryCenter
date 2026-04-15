@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { mockOrders, mockStatusLogs, mockMitra } from '@/lib/mock-data';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, OrderStatus } from '@/lib/types';
-import { Search, WashingMachine, CheckCircle2, Circle } from 'lucide-react';
+import { QrCode, Search, WashingMachine, CheckCircle2, Circle, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 
@@ -25,104 +25,149 @@ export default function TrackingPage() {
   const currentIdx = order ? ORDER_STATUS_FLOW.indexOf(order.status) : -1;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <WashingMachine className="h-4 w-4 text-primary-foreground" />
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b border-border/50 bg-white sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2 text-blue-600">
+            <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200">
+              <WashingMachine className="h-6 w-6 text-white" />
             </div>
-            <span className="font-bold">LaundryCenter</span>
+            <span className="font-bold text-xl tracking-tight text-slate-900">LaundryCenter</span>
           </Link>
-          <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Login</Link>
+          <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors bg-slate-100 px-4 py-2 rounded-full">Login Portal</Link>
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto px-4 py-12">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Lacak Laundry Anda</h1>
-          <p className="text-muted-foreground">Masukkan kode order untuk melihat status terbaru</p>
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
+          <h1 className="text-4xl font-extrabold text-slate-900 mb-4">Lacak Laundry Anda</h1>
+          <p className="text-slate-600 text-lg">Pantau status cucian Anda secara real-time dari mana saja</p>
         </motion.div>
 
-        <form onSubmit={handleSearch} className="flex gap-2 mb-8">
-          <Input
-            value={kode}
-            onChange={(e) => { setKode(e.target.value); setSearched(false); }}
-            placeholder="Contoh: LD-20250414-001"
-            className="text-center font-mono"
-          />
-          <Button type="submit"><Search className="h-4 w-4 mr-2" />Cari</Button>
+        <form onSubmit={handleSearch} className="flex gap-3 mb-10 max-w-xl mx-auto">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+            <Input
+              value={kode}
+              onChange={(e) => { setKode(e.target.value); setSearched(false); }}
+              placeholder="Masukkan Kode Order (e.g. LD-2025...)"
+              className="pl-10 h-12 text-lg font-mono border-slate-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl bg-white shadow-sm"
+            />
+          </div>
+          <Button type="submit" className="h-12 px-8 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-100 transition-all active:scale-95">
+            Lacak
+          </Button>
         </form>
 
         {searched && !order && (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">Order dengan kode <strong>{kode}</strong> tidak ditemukan.</p>
-          </Card>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+            <Card className="p-12 text-center border-dashed border-2 bg-white rounded-3xl">
+              <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Search className="h-8 w-8 text-slate-400" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Order Tidak Ditemukan</h3>
+              <p className="text-slate-500 max-w-xs mx-auto">Kode order <strong>{kode}</strong> tidak terdaftar di sistem kami. Mohon cek kembali struk Anda.</p>
+            </Card>
+          </motion.div>
         )}
 
         {order && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-            <Card className="p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div>
-                  <p className="font-mono text-lg font-bold">{order.kode_order}</p>
-                  <p className="text-sm text-muted-foreground">{order.customer_nama} • {mitra?.nama_toko}</p>
+            <div className="grid md:grid-cols-3 gap-6">
+              <Card className="md:col-span-2 p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5">
+                  <QrCode className="h-32 w-32" />
                 </div>
-                <StatusBadge status={order.status} />
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs">Jenis</p>
-                  <p className="font-medium capitalize">{order.jenis}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">{order.jenis === 'kiloan' ? 'Berat' : 'Jumlah'}</p>
-                  <p className="font-medium">{order.berat} {order.jenis === 'kiloan' ? 'kg' : 'item'}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Harga</p>
-                  <p className="font-medium">Rp {order.harga.toLocaleString('id-ID')}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Masuk</p>
-                  <p className="font-medium">{order.tanggal_masuk}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <h3 className="font-semibold mb-6">Timeline Progress</h3>
-              <div className="space-y-0">
-                {ORDER_STATUS_FLOW.map((status, i) => {
-                  const log = logs.find((l) => l.status === status);
-                  const isCompleted = i <= currentIdx;
-                  const isCurrent = i === currentIdx;
-
-                  return (
-                    <div key={status} className="flex gap-4">
-                      <div className="flex flex-col items-center">
-                        {isCompleted ? (
-                          <CheckCircle2 className={`h-5 w-5 shrink-0 ${isCurrent ? 'text-primary' : 'text-success'}`} />
-                        ) : (
-                          <Circle className="h-5 w-5 shrink-0 text-border" />
-                        )}
-                        {i < ORDER_STATUS_FLOW.length - 1 && (
-                          <div className={`w-0.5 h-8 ${isCompleted ? 'bg-success' : 'bg-border'}`} />
-                        )}
+                <div className="relative z-10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded">Order ID</span>
+                        <p className="font-mono text-xl font-black text-slate-900">{order.kode_order}</p>
                       </div>
-                      <div className={`pb-8 ${isCompleted ? '' : 'opacity-40'}`}>
-                        <p className={`text-sm font-medium ${isCurrent ? 'text-primary' : ''}`}>
-                          {ORDER_STATUS_LABELS[status]}
-                        </p>
-                        {log && (
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(log.timestamp).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
-                          </p>
-                        )}
+                      <p className="text-slate-600 font-medium">{order.customer_nama} <span className="text-slate-300 mx-2">|</span> {mitra?.nama_toko}</p>
+                    </div>
+                    <StatusBadge status={order.status} className="h-10 px-6 text-sm font-bold rounded-full shadow-sm" />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="space-y-1">
+                      <p className="text-slate-400 text-xs font-semibold uppercase">Layanan</p>
+                      <p className="font-bold text-slate-900 capitalize">{order.jenis}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-slate-400 text-xs font-semibold uppercase">{order.jenis === 'kiloan' ? 'Berat' : 'Jumlah'}</p>
+                      <p className="font-bold text-slate-900">{order.berat} {order.jenis === 'kiloan' ? 'kg' : 'item'}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-slate-400 text-xs font-semibold uppercase">Total Bayar</p>
+                      <p className="font-bold text-blue-600">Rp {order.harga.toLocaleString('id-ID')}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-slate-400 text-xs font-semibold uppercase">Estimasi</p>
+                      <div className="flex items-center gap-1 text-slate-900 font-bold">
+                        <Clock className="h-3 w-3" />
+                        <span>3 Hari</span>
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-blue-600 text-white rounded-3xl flex flex-col items-center justify-center text-center">
+                <div className="bg-white/20 p-4 rounded-2xl mb-4 backdrop-blur-md border border-white/20">
+                  <QrCode className="h-20 w-20 text-white" />
+                </div>
+                <p className="font-bold text-lg mb-1">Scan QR Tracking</p>
+                <p className="text-blue-100 text-xs">Simpan kode ini untuk mempermudah pengecekan status laundry Anda.</p>
+              </Card>
+            </div>
+
+            <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
+              <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-blue-600"></div>
+                Timeline Progress
+              </h3>
+              <div className="relative pl-4">
+                <div className="absolute left-[21px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                <div className="space-y-2">
+                  {ORDER_STATUS_FLOW.map((status, i) => {
+                    const log = logs.find((l) => l.status === status);
+                    const isCompleted = i <= currentIdx;
+                    const isCurrent = i === currentIdx;
+
+                    return (
+                      <div key={status} className="relative flex gap-6 pb-8 last:pb-0">
+                        <div className="relative z-10 flex items-center justify-center h-4 w-4 mt-1">
+                          {isCompleted ? (
+                            <div className={`h-4 w-4 rounded-full flex items-center justify-center ring-4 ${isCurrent ? 'bg-blue-600 ring-blue-100 animate-pulse' : 'bg-green-500 ring-green-50'}`}>
+                              <CheckCircle2 className="h-3 w-3 text-white" />
+                            </div>
+                          ) : (
+                            <div className="h-3 w-3 rounded-full bg-white border-2 border-slate-200 ring-4 ring-slate-50"></div>
+                          )}
+                        </div>
+                        <div className={`flex-1 ${isCompleted ? '' : 'opacity-40'}`}>
+                          <div className="flex items-center justify-between gap-4">
+                            <p className={`text-base font-bold ${isCurrent ? 'text-blue-600' : 'text-slate-900'}`}>
+                              {ORDER_STATUS_LABELS[status]}
+                            </p>
+                            {log && (
+                              <p className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded">
+                                {new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            )}
+                          </div>
+                          {log && (
+                            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                              {new Date(log.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </Card>
           </motion.div>

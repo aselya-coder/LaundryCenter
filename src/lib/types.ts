@@ -7,10 +7,10 @@ export type OrderStatus =
   | 'dicuci'
   | 'dikeringkan'
   | 'disetrika'
-  | 'selesai_proses'
+  | 'selesai_pusat'
   | 'dikirim_ke_mitra'
   | 'siap_diambil'
-  | 'selesai';
+  | 'selesai_closed';
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   diterima_mitra: 'Diterima Mitra',
@@ -19,10 +19,10 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   dicuci: 'Dicuci',
   dikeringkan: 'Dikeringkan',
   disetrika: 'Disetrika',
-  selesai_proses: 'Selesai Diproses',
+  selesai_pusat: 'Selesai',
   dikirim_ke_mitra: 'Dikirim ke Mitra',
   siap_diambil: 'Siap Diambil',
-  selesai: 'Selesai',
+  selesai_closed: 'Selesai (Closed)',
 };
 
 export const ORDER_STATUS_FLOW: OrderStatus[] = [
@@ -32,10 +32,10 @@ export const ORDER_STATUS_FLOW: OrderStatus[] = [
   'dicuci',
   'dikeringkan',
   'disetrika',
-  'selesai_proses',
+  'selesai_pusat',
   'dikirim_ke_mitra',
   'siap_diambil',
-  'selesai',
+  'selesai_closed',
 ];
 
 export interface User {

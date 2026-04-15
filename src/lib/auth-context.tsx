@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User, UserRole, Mitra } from './types';
 import { mockUsers, mockMitra } from './mock-data';
 
@@ -13,7 +13,18 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('laundry_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('laundry_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('laundry_user');
+    }
+  }, [user]);
 
   const login = useCallback((email: string, _password: string) => {
     const found = mockUsers.find((u) => u.email === email);

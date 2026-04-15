@@ -8,8 +8,12 @@ import {
   PlusCircle,
   History,
   Building2,
+  WashingMachine,
+  ChevronLeft,
+  Settings,
+  HelpCircle,
 } from 'lucide-react';
-import { NavLink } from '@/components/NavLink';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import {
   Sidebar,
@@ -22,58 +26,71 @@ import {
   SidebarMenuItem,
   SidebarFooter,
   useSidebar,
+  SidebarHeader,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 
 const adminItems = [
   { title: 'Dashboard', url: '/admin', icon: LayoutDashboard },
   { title: 'Semua Order', url: '/admin/orders', icon: Package },
   { title: 'Kelola Mitra', url: '/admin/mitra', icon: Building2 },
-  { title: 'Laporan', url: '/admin/reports', icon: FileText },
+  { title: 'Laporan Keuangan', url: '/admin/reports', icon: FileText },
 ];
 
 const mitraItems = [
   { title: 'Dashboard', url: '/mitra', icon: LayoutDashboard },
-  { title: 'Order Baru', url: '/mitra/new-order', icon: PlusCircle },
+  { title: 'Input Order Baru', url: '/mitra/new-order', icon: PlusCircle },
   { title: 'Riwayat Order', url: '/mitra/orders', icon: History },
 ];
 
 export function AppSidebar() {
-  const { user, logout } = useAuth();
-  const { state } = useSidebar();
-  const collapsed = state === 'collapsed';
+  const { user, logout, mitra } = useAuth();
+  const { state, toggleSidebar } = useSidebar();
+  const isCollapsed = state === 'collapsed';
   const items = user?.role === 'admin' ? adminItems : mitraItems;
 
   return (
-    <Sidebar collapsible="icon" className="border-r-0">
-      <SidebarContent className="bg-sidebar">
+    <Sidebar collapsible="icon" className="border-r border-slate-200 bg-white">
+      <SidebarHeader className="p-4 flex flex-row items-center justify-between">
+        <div className={`flex items-center gap-3 transition-all duration-300 ${isCollapsed ? 'opacity-0 scale-0 w-0' : 'opacity-100 scale-100'}`}>
+          <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
+            <WashingMachine className="h-6 w-6 text-white" />
+          </div>
+          <div className="overflow-hidden">
+            <p className="font-bold text-slate-900 leading-tight">LaundryCenter</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Management System</p>
+          </div>
+        </div>
+        {isCollapsed && (
+          <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center mx-auto shadow-lg shadow-blue-200">
+            <WashingMachine className="h-6 w-6 text-white" />
+          </div>
+        )}
+      </SidebarHeader>
+
+      <SidebarContent className="px-3 pt-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/60 px-4 pt-6 pb-2">
-            {!collapsed && (
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-                  <span className="text-sidebar-primary-foreground font-bold text-sm">LC</span>
-                </div>
-                <div>
-                  <p className="text-sidebar-foreground font-semibold text-sm">LaundryCenter</p>
-                  <p className="text-sidebar-foreground/50 text-xs capitalize">{user?.role}</p>
-                </div>
-              </div>
-            )}
+          <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 px-3 mb-2">
+            {!isCollapsed && 'Main Menu'}
           </SidebarGroupLabel>
-          <SidebarGroupContent className="mt-4">
-            <SidebarMenu>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-1">
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      end={item.url === '/admin' || item.url === '/mitra'}
-                      className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors rounded-lg px-3 py-2.5"
-                      activeClassName="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
+                      className={({ isActive }) => 
+                        `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
+                          isActive 
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' 
+                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                        }`
+                      }
                     >
-                      <item.icon className="mr-3 h-4 w-4" />
-                      {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
+                      <item.icon className={`h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110`} />
+                      {!isCollapsed && <span className="font-semibold text-sm">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -81,22 +98,60 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup className="mt-4">
+          <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 px-3 mb-2">
+            {!isCollapsed && 'Lainnya'}
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-1">
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Pengaturan">
+                  <NavLink
+                    to={user?.role === 'admin' ? '/admin/settings' : '/mitra/settings'}
+                    className={({ isActive }) => 
+                      `flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
+                        isActive 
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' 
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }`
+                    }
+                  >
+                    <Settings className="h-5 w-5 shrink-0" />
+                    {!isCollapsed && <span className="font-semibold text-sm">Pengaturan</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="bg-sidebar p-3">
-        {!collapsed && (
-          <div className="px-2 pb-2">
-            <p className="text-sidebar-foreground text-sm font-medium truncate">{user?.nama}</p>
-            <p className="text-sidebar-foreground/50 text-xs truncate">{user?.email}</p>
-          </div>
-        )}
-        <Button
-          variant="ghost"
-          className="w-full justify-start text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10"
-          onClick={logout}
-        >
-          <LogOut className="mr-2 h-4 w-4" />
-          {!collapsed && 'Keluar'}
-        </Button>
+
+      <SidebarFooter className="p-4 mt-auto">
+        <div className={`p-4 rounded-2xl bg-slate-50 border border-slate-100 transition-all duration-300 ${isCollapsed ? 'p-1 bg-transparent border-transparent' : ''}`}>
+          {!isCollapsed && (
+            <div className="mb-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-10 w-10 rounded-full bg-blue-100 border-2 border-white shadow-sm flex items-center justify-center font-bold text-blue-600 text-sm">
+                  {user?.nama.charAt(0)}
+                </div>
+                <div className="overflow-hidden">
+                  <p className="font-bold text-slate-900 text-sm truncate">{user?.nama}</p>
+                  <p className="text-xs text-slate-400 font-medium truncate uppercase">{user?.role === 'admin' ? 'Administrator' : mitra?.nama_toko}</p>
+                </div>
+              </div>
+              <Separator className="bg-slate-200/60" />
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            className={`w-full justify-start text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors ${isCollapsed ? 'justify-center p-0 h-10 w-10' : 'px-2 h-10'}`}
+            onClick={logout}
+          >
+            <LogOut className={`h-5 w-5 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-bold text-sm">Keluar Akun</span>}
+          </Button>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
