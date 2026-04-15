@@ -1,8 +1,8 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { mockOrders, mockMitra } from '@/lib/mock-data';
-import { DollarSign, TrendingUp, Users, Receipt, FileDown, Calendar, ArrowUpRight, Wallet, PieChart as PieChartIcon, Activity, FileText } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, PieChart, Pie } from 'recharts';
+import { DollarSign, TrendingUp, Receipt, FileDown, Calendar, ArrowUpRight, Wallet, PieChart as PieChartIcon, Activity } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 const totalTransaksi = mockOrders.reduce((sum, o) => sum + o.harga, 0);
 const completedOrders = mockOrders.filter((o) => o.status === 'selesai_closed');
@@ -141,7 +141,7 @@ export default function AdminReports() {
             <PieChart>
               <Pie data={mitraReport} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={8} dataKey="komisi" stroke="none">
                 {mitraReport.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} cornerRadius={6} />
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip 

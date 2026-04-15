@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/lib/auth-context';
 import { mockOrders } from '@/lib/mock-data';
-import { Search, Filter, Calendar, ArrowUpRight, User, Phone, Tag, DollarSign, Clock, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Search, Calendar, User, Tag, DollarSign, Clock, CheckCircle2, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function MitraOrders() {

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { mockOrders, mockStatusLogs, mockMitra } from '@/lib/mock-data';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, OrderStatus } from '@/lib/types';
-import { QrCode, Search, WashingMachine, CheckCircle2, Circle, Clock } from 'lucide-react';
+import { QrCode, Search, WashingMachine, CheckCircle2, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 
@@ -27,14 +27,14 @@ export default function TrackingPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-border/50 bg-white sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="w-full px-8 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-blue-600">
             <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200">
               <WashingMachine className="h-6 w-6 text-white" />
             </div>
             <span className="font-bold text-xl tracking-tight text-slate-900">LaundryCenter</span>
           </Link>
-          <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors bg-slate-100 px-4 py-2 rounded-full">Login Portal</Link>
+          <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors bg-slate-100 px-4 py-2 rounded-full">Login</Link>
         </div>
       </header>
 

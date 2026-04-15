@@ -1,10 +1,9 @@
 import { Package, DollarSign, Users, TrendingUp, ArrowUpRight, ArrowDownRight, Activity, MapPin } from 'lucide-react';
-import { StatCard } from '@/components/StatCard';
 import { Card } from '@/components/ui/card';
 import { StatusBadge } from '@/components/StatusBadge';
-import { mockOrders, mockMitra, mockTransaksi } from '@/lib/mock-data';
+import { mockOrders, mockMitra } from '@/lib/mock-data';
 import { ORDER_STATUS_LABELS, OrderStatus } from '@/lib/types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 
 const today = new Date().toISOString().split('T')[0];
 const ordersToday = mockOrders.filter((o) => o.tanggal_masuk === today);
@@ -14,11 +13,6 @@ const statusCounts = mockOrders.reduce((acc, o) => {
   acc[o.status] = (acc[o.status] || 0) + 1;
   return acc;
 }, {} as Record<string, number>);
-
-const chartData = Object.entries(statusCounts).map(([status, count]) => ({
-  name: ORDER_STATUS_LABELS[status as OrderStatus],
-  value: count,
-}));
 
 const cityData = mockMitra.reduce((acc, m) => {
   acc[m.kota] = (acc[m.kota] || 0) + 1;
@@ -150,7 +144,7 @@ export default function AdminDashboard() {
             <PieChart>
               <Pie data={cityChartData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value" stroke="none">
                 {cityChartData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} cornerRadius={4} />
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip 

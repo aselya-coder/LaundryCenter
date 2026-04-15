@@ -1,4 +1,4 @@
-import { Package, DollarSign, Clock, CheckCircle, Plus, ArrowRight, Wallet, History, Search, Activity, FileText, HelpCircle } from 'lucide-react';
+import { Package, DollarSign, Clock, Plus, ArrowRight, Wallet, History, Search, Activity, FileText, HelpCircle } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
