@@ -1,30 +1,58 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/lib/auth-context';
-import { mockOrders } from '@/lib/mock-data';
-import { Search, Calendar, User, Tag, DollarSign, Clock, CheckCircle2, ChevronRight } from 'lucide-react';
+import { mockOrders as initialOrders } from '@/lib/mock-data';
+import { Order, OrderStatus } from '@/lib/types';
+import { Search, Calendar, User, Tag, DollarSign, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { NextActionCard } from '@/components/order/NextActionCard';
 
 export default function MitraOrders() {
   const { mitra } = useAuth();
+  
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const savedOrders = localStorage.getItem('laundry-orders');
+      if (savedOrders) {
+        return JSON.parse(savedOrders);
+      }
+    } catch (error) {
+      console.error("Gagal memuat data order dari localStorage", error);
+    }
+    return initialOrders;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('laundry-orders', JSON.stringify(orders));
+  }, [orders]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  if (!mitra) return null;
+  const handleUpdateStatus = (orderId: string, newStatus: OrderStatus) => {
+    setOrders((currentOrders) =>
+      currentOrders.map((order) =>
+        order.id === orderId ? { ...order, status: newStatus } : order
+      )
+    );
+  };
 
   const myOrders = useMemo(() => {
-    return mockOrders.filter((o) => {
+    if (!mitra) return [];
+    return orders.filter((o) => {
       const isMyOrder = o.mitra_id === mitra.id;
-      const matchesSearch = 
+      const matchesSearch =
         o.kode_order.toLowerCase().includes(searchTerm.toLowerCase()) ||
         o.customer_nama.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
       return isMyOrder && matchesSearch && matchesStatus;
     });
-  }, [mitra.id, searchTerm, filterStatus]);
+  }, [mitra, orders, searchTerm, filterStatus]);
+
+  if (!mitra) return null;
 
   return (
     <div className="space-y-8 pb-10">
@@ -124,14 +152,7 @@ export default function MitraOrders() {
                   </div>
                 </div>
                 
-                <div className="bg-slate-50 p-6 md:w-48 flex flex-col justify-center items-center gap-3 border-l border-slate-100">
-                  <div className="p-3 bg-white rounded-2xl shadow-sm group-hover:scale-110 transition-transform">
-                    <CheckCircle2 className={`h-6 w-6 ${order.status === 'selesai_closed' ? 'text-green-500' : 'text-slate-300'}`} />
-                  </div>
-                  <Button variant="ghost" className="h-10 rounded-xl font-bold text-xs text-blue-600 hover:bg-blue-50 w-full gap-1">
-                    Detail <ChevronRight className="h-3 w-3" />
-                  </Button>
-                </div>
+                <NextActionCard order={order} onUpdateStatus={handleUpdateStatus} />
               </div>
             </Card>
           ))

@@ -13,7 +13,9 @@ import AdminMitra from "./pages/admin/AdminMitra";
 import AdminReports from "./pages/admin/AdminReports";
 import MitraDashboard from "./pages/mitra/MitraDashboard";
 import MitraNewOrder from "./pages/mitra/MitraNewOrder";
-import MitraOrders from "./pages/mitra/MitraOrders";
+import MitraOrders from "@/pages/mitra/MitraOrders";
+import OrderDetailPage from "@/pages/mitra/OrderDetailPage";
+import MitraSettings from "@/pages/mitra/MitraSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +53,8 @@ const App = () => (
             <Route path="/mitra" element={<ProtectedRoute role="mitra"><MitraDashboard /></ProtectedRoute>} />
             <Route path="/mitra/new-order" element={<ProtectedRoute role="mitra"><MitraNewOrder /></ProtectedRoute>} />
             <Route path="/mitra/orders" element={<ProtectedRoute role="mitra"><MitraOrders /></ProtectedRoute>} />
+            <Route path="/mitra/orders/:orderId" element={<ProtectedRoute role="mitra"><OrderDetailPage /></ProtectedRoute>} />
+            <Route path="/mitra/settings" element={<ProtectedRoute role="mitra"><MitraSettings /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
