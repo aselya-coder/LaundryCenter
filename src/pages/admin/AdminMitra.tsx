@@ -1,22 +1,40 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { mockMitra } from '@/lib/mock-data';
+import { supabase } from '@/lib/supabase';
 import { Mitra } from '@/lib/types';
-import { PlusCircle, Building2, MapPin, Percent, Search, MoreVertical, Edit2, Trash2, Power, Store, Globe, Wallet } from 'lucide-react';
+import { PlusCircle, MapPin, Percent, Search, Edit2, Power, Store, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Separator } from '@/components/ui/separator';
 
 export default function AdminMitra() {
-  const [mitraList, setMitraList] = useState<Mitra[]>(mockMitra);
+  const [mitraList, setMitraList] = useState<Mitra[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [open, setOpen] = useState(false);
   const [editingMitra, setEditingMitra] = useState<Mitra | null>(null);
   const [form, setForm] = useState({ nama_toko: '', alamat: '', kota: '', komisi: '20' });
+
+  const fetchMitra = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.from('mitra').select('*');
+      if (error) throw error;
+      setMitraList(data || []);
+    } catch (err) {
+      console.error('Error fetching mitra:', err);
+      toast.error('Gagal mengambil data mitra');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMitra();
+  }, []);
 
   const filteredMitra = useMemo(() => {
     return mitraList.filter((m) => 
@@ -26,30 +44,41 @@ export default function AdminMitra() {
     );
   }, [mitraList, searchTerm]);
 
-  const handleSave = () => {
-    if (editingMitra) {
-      setMitraList((prev) => prev.map((m) => m.id === editingMitra.id ? {
-        ...m,
-        nama_toko: form.nama_toko,
-        alamat: form.alamat,
-        kota: form.kota,
-        komisi: Number(form.komisi),
-      } : m));
-      toast.success('Data mitra berhasil diperbarui');
-    } else {
-      const newMitra: Mitra = {
-        id: `m${Date.now()}`,
-        user_id: `u${Date.now()}`,
-        nama_toko: form.nama_toko,
-        alamat: form.alamat,
-        kota: form.kota,
-        komisi: Number(form.komisi),
-        aktif: true,
-      };
-      setMitraList((prev) => [...prev, newMitra]);
-      toast.success('Mitra baru berhasil ditambahkan');
+  const handleSave = async () => {
+    try {
+      if (editingMitra) {
+        const { error } = await supabase
+          .from('mitra')
+          .update({
+            nama_toko: form.nama_toko,
+            alamat: form.alamat,
+            kota: form.kota,
+            komisi: Number(form.komisi),
+          })
+          .eq('id', editingMitra.id);
+        
+        if (error) throw error;
+        toast.success('Data mitra berhasil diperbarui');
+      } else {
+        const { error } = await supabase
+          .from('mitra')
+          .insert([{
+            nama_toko: form.nama_toko,
+            alamat: form.alamat,
+            kota: form.kota,
+            komisi: Number(form.komisi),
+            aktif: true,
+          }]);
+        
+        if (error) throw error;
+        toast.success('Mitra baru berhasil ditambahkan');
+      }
+      fetchMitra();
+      resetForm();
+    } catch (err) {
+      console.error('Error saving mitra:', err);
+      toast.error('Gagal menyimpan data mitra');
     }
-    resetForm();
   };
 
   const resetForm = () => {
@@ -69,11 +98,30 @@ export default function AdminMitra() {
     setOpen(true);
   };
 
-  const toggleActive = (id: string) => {
-    setMitraList((prev) => prev.map((m) => (m.id === id ? { ...m, aktif: !m.aktif } : m)));
-    const mitra = mitraList.find(m => m.id === id);
-    toast.success(`Mitra ${mitra?.nama_toko} kini ${!mitra?.aktif ? 'Aktif' : 'Nonaktif'}`);
+  const toggleActive = async (mitra: Mitra) => {
+    try {
+      const { error } = await supabase
+        .from('mitra')
+        .update({ aktif: !mitra.aktif })
+        .eq('id', mitra.id);
+      
+      if (error) throw error;
+      toast.success(`Mitra ${mitra.nama_toko} kini ${!mitra.aktif ? 'Aktif' : 'Nonaktif'}`);
+      fetchMitra();
+    } catch (err) {
+      console.error('Error toggling active status:', err);
+      toast.error('Gagal mengubah status aktif');
+    }
   };
+
+  if (loading && mitraList.length === 0) {
+    return (
+      <div className="h-96 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+        <p className="text-slate-500 font-bold">Memuat data mitra...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">
@@ -98,71 +146,34 @@ export default function AdminMitra() {
             </DialogHeader>
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-400">Nama Toko / Outlet</Label>
-                <div className="relative">
-                  <Store className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input 
-                    className="pl-10 h-12 rounded-xl border-slate-200 focus:border-blue-500 bg-slate-50/50 font-semibold"
-                    value={form.nama_toko} 
-                    onChange={(e) => setForm({ ...form, nama_toko: e.target.value })} 
-                    placeholder="e.g. Laundry Express Menteng" 
-                  />
-                </div>
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nama Toko/Outlet</Label>
+                <Input value={form.nama_toko} onChange={(e) => setForm({...form, nama_toko: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" placeholder="Contoh: Laundry Express" />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-400">Alamat Lengkap</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                  <Input 
-                    className="pl-10 h-12 rounded-xl border-slate-200 focus:border-blue-500 bg-slate-50/50 font-semibold"
-                    value={form.alamat} 
-                    onChange={(e) => setForm({ ...form, alamat: e.target.value })} 
-                    placeholder="Jl. Raya No. 123..." 
-                  />
-                </div>
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Kota</Label>
+                <Input value={form.kota} onChange={(e) => setForm({...form, kota: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" placeholder="Contoh: Jakarta" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-slate-400">Kota</Label>
-                  <div className="relative">
-                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input 
-                      className="pl-10 h-12 rounded-xl border-slate-200 focus:border-blue-500 bg-slate-50/50 font-semibold"
-                      value={form.kota} 
-                      onChange={(e) => setForm({ ...form, kota: e.target.value })} 
-                      placeholder="e.g. Jakarta" 
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-slate-400">Komisi (%)</Label>
-                  <div className="relative">
-                    <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input 
-                      type="number" 
-                      className="pl-10 h-12 rounded-xl border-slate-200 focus:border-blue-500 bg-slate-50/50 font-semibold"
-                      value={form.komisi} 
-                      onChange={(e) => setForm({ ...form, komisi: e.target.value })} 
-                    />
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Alamat Lengkap</Label>
+                <Input value={form.alamat} onChange={(e) => setForm({...form, alamat: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" placeholder="Jl. Raya No. 123..." />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Persentase Komisi (%)</Label>
+                <Input type="number" value={form.komisi} onChange={(e) => setForm({...form, komisi: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" placeholder="20" />
               </div>
             </div>
-            <DialogFooter className="mt-8 flex gap-3">
-              <Button variant="ghost" onClick={resetForm} className="rounded-xl font-bold h-12 text-slate-500">Batal</Button>
-              <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-12 flex-1 font-bold shadow-lg shadow-blue-100">
-                {editingMitra ? 'Simpan Perubahan' : 'Daftarkan Mitra'}
-              </Button>
+            <DialogFooter className="mt-8">
+              <Button onClick={handleSave} className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-black uppercase tracking-widest text-xs">Simpan Data Mitra</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="relative max-w-xl">
+      <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
         <Input 
-          className="pl-12 h-12 rounded-2xl border-none shadow-xl shadow-slate-200/50 bg-white font-semibold text-slate-600 focus-visible:ring-blue-500"
-          placeholder="Cari nama toko, kota, atau alamat..."
+          className="pl-12 h-14 rounded-2xl border-none shadow-xl shadow-slate-200/50 bg-white font-semibold text-slate-600 focus-visible:ring-blue-500"
+          placeholder="Cari Mitra berdasarkan nama, kota, atau alamat..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -170,70 +181,37 @@ export default function AdminMitra() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredMitra.map((mitra) => (
-          <Card key={mitra.id} className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl relative overflow-hidden group hover:ring-2 hover:ring-blue-100 transition-all">
-            <div className="absolute top-0 right-0 p-4">
-              <Badge 
-                variant={mitra.aktif ? 'default' : 'secondary'} 
-                className={`h-6 px-3 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                  mitra.aktif ? 'bg-green-500 text-white shadow-lg shadow-green-100' : 'bg-slate-100 text-slate-400'
-                }`}
-              >
-                {mitra.aktif ? 'Aktif' : 'Nonaktif'}
-              </Badge>
-            </div>
-
-            <div className="flex items-center gap-4 mb-6">
-              <div className="h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shadow-sm border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
-                <Store className="h-7 w-7" />
-              </div>
-              <div className="overflow-hidden">
-                <h3 className="font-black text-slate-900 text-lg truncate pr-16">{mitra.nama_toko}</h3>
-                <div className="flex items-center gap-1 text-slate-400 font-bold text-xs uppercase tracking-wider">
-                  <MapPin className="h-3 w-3" />
-                  {mitra.kota}
+          <Card key={mitra.id} className="p-0 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl overflow-hidden group hover:ring-2 hover:ring-blue-100 transition-all duration-300">
+            <div className="p-6 border-b border-slate-50">
+              <div className="flex items-start justify-between mb-4">
+                <div className="h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                  <Store className="h-6 w-6" />
                 </div>
+                <Badge className={`rounded-lg px-3 py-1 font-black uppercase text-[10px] tracking-widest border-none ${mitra.aktif ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                  {mitra.aktif ? 'Aktif' : 'Nonaktif'}
+                </Badge>
+              </div>
+              <h3 className="text-lg font-black text-slate-900 mb-1">{mitra.nama_toko}</h3>
+              <div className="flex items-center gap-1.5 text-slate-400 mb-4">
+                <MapPin className="h-3.5 w-3.5" />
+                <span className="text-xs font-bold">{mitra.kota}</span>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Percent className="h-4 w-4 text-blue-600" />
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Komisi</span>
+                </div>
+                <span className="text-lg font-black text-blue-600">{mitra.komisi}%</span>
               </div>
             </div>
-
-            <p className="text-sm text-slate-500 font-medium mb-6 line-clamp-2 min-h-[40px] leading-relaxed">
-              {mitra.alamat}
-            </p>
-
-            <Separator className="bg-slate-50 mb-6" />
-
-            <div className="flex items-center justify-between mb-8">
-              <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 text-center flex-1 mr-2">
-                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Komisi</p>
-                <p className="text-xl font-black text-blue-600">{mitra.komisi}%</p>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center flex-1 ml-2">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
-                <p className={`text-xs font-black uppercase tracking-wider ${mitra.aktif ? 'text-green-500' : 'text-slate-400'}`}>
-                  {mitra.aktif ? 'Online' : 'Offline'}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button 
-                variant="outline" 
-                className="rounded-xl font-bold border-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-600 h-11 gap-2"
-                onClick={() => handleEdit(mitra)}
-              >
+            <div className="p-4 bg-slate-50/50 flex gap-2">
+              <Button onClick={() => handleEdit(mitra)} variant="ghost" className="flex-1 h-10 rounded-xl font-bold text-slate-600 hover:bg-white hover:text-blue-600 gap-2">
                 <Edit2 className="h-4 w-4" />
                 Edit
               </Button>
-              <Button 
-                variant={mitra.aktif ? "outline" : "default"}
-                className={`rounded-xl font-bold h-11 gap-2 ${
-                  mitra.aktif 
-                  ? 'border-red-100 text-red-500 hover:bg-red-50 hover:text-red-600' 
-                  : 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-100'
-                }`}
-                onClick={() => toggleActive(mitra.id)}
-              >
+              <Button onClick={() => toggleActive(mitra)} variant="ghost" className={`flex-1 h-10 rounded-xl font-bold gap-2 ${mitra.aktif ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'}`}>
                 <Power className="h-4 w-4" />
-                {mitra.aktif ? 'Matikan' : 'Aktifkan'}
+                {mitra.aktif ? 'Nonaktifkan' : 'Aktifkan'}
               </Button>
             </div>
           </Card>

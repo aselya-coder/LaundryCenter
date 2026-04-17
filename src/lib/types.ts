@@ -38,15 +38,37 @@ export const ORDER_STATUS_FLOW: OrderStatus[] = [
   'selesai_closed',
 ];
 
-// This type should match the structure of your 'orders' table in Supabase
+export interface User {
+  id: string;
+  nama: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface Mitra {
+  id: string;
+  nama_toko: string;
+  alamat: string;
+  kota: string;
+  komisi: number;
+  aktif: boolean;
+}
+
 export interface Order {
-  id: number; // Supabase typically uses number for auto-incrementing IDs
+  id: string;
+  kode_order: string;
   customer_name: string;
-  status: OrderStatus;
+  customer_hp: string;
+  mitra_id: string;
+  jenis: 'kiloan' | 'satuan';
+  berat: number;
   total_price: number;
+  status: OrderStatus;
+  catatan: string;
   updated_at: string;
-  // Add other fields from your Supabase table if they exist
-  // For example:
-  // created_at: string;
-  // mitra_id: string;
+  tanggal_masuk: string;
+  tanggal_selesai: string | null;
+  mitra?: {
+    nama_toko: string;
+  };
 }

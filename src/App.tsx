@@ -11,6 +11,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminMitra from "./pages/admin/AdminMitra";
 import AdminReports from "./pages/admin/AdminReports";
+import AdminSettings from "./pages/admin/AdminSettings";
 import MitraDashboard from "./pages/mitra/MitraDashboard";
 import MitraNewOrder from "./pages/mitra/MitraNewOrder";
 import MitraOrders from "@/pages/mitra/MitraOrders";
@@ -39,7 +40,12 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <BrowserRouter 
+          future={{ 
+            v7_startTransition: true, 
+            v7_relativeSplatPath: true,
+          }}
+        >
           <Routes>
             <Route path="/" element={<TrackingPage />} />
             <Route path="/tracking" element={<TrackingPage />} />
@@ -49,6 +55,7 @@ const App = () => (
             <Route path="/admin/orders" element={<ProtectedRoute role="admin"><AdminOrders /></ProtectedRoute>} />
             <Route path="/admin/mitra" element={<ProtectedRoute role="admin"><AdminMitra /></ProtectedRoute>} />
             <Route path="/admin/reports" element={<ProtectedRoute role="admin"><AdminReports /></ProtectedRoute>} />
+            <Route path="/admin/settings" element={<ProtectedRoute role="admin"><AdminSettings /></ProtectedRoute>} />
 
             <Route path="/mitra" element={<ProtectedRoute role="mitra"><MitraDashboard /></ProtectedRoute>} />
             <Route path="/mitra/new-order" element={<ProtectedRoute role="mitra"><MitraNewOrder /></ProtectedRoute>} />

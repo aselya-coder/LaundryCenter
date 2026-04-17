@@ -1,32 +1,77 @@
+import { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { mockOrders, mockMitra } from '@/lib/mock-data';
-import { DollarSign, TrendingUp, Receipt, FileDown, Calendar, ArrowUpRight, Wallet, PieChart as PieChartIcon, Activity } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Order } from '@/lib/types';
+import { DollarSign, TrendingUp, Receipt, FileDown, Calendar, Wallet, Activity, Loader2, PieChart as PieChartIcon } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
-const totalTransaksi = mockOrders.reduce((sum, o) => sum + o.harga, 0);
-const completedOrders = mockOrders.filter((o) => o.status === 'selesai_closed');
-
-const mitraReport = mockMitra.map((m) => {
-  const mitraOrders = mockOrders.filter((o) => o.mitra_id === m.id);
-  const total = mitraOrders.reduce((sum, o) => sum + o.harga, 0);
-  const komisi = total * (m.komisi / 100);
-  return { 
-    nama: m.nama_toko, 
-    total, 
-    komisi, 
-    bersih: total - komisi, 
-    orders: mitraOrders.length,
-    initial: m.nama_toko.charAt(0)
-  };
-});
-
-const totalKomisi = mitraReport.reduce((sum, m) => sum + m.komisi, 0);
-const totalBersih = totalTransaksi - totalKomisi;
-
-const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#0ea5e9', '#6366f1'];
-
 export default function AdminReports() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [mitraList, setMitraList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [ordersRes, mitraRes] = await Promise.all([
+          supabase.from('orders').select('*'),
+          supabase.from('mitra').select('*')
+        ]);
+
+        if (ordersRes.error) throw ordersRes.error;
+        if (mitraRes.error) throw mitraRes.error;
+
+        setOrders(ordersRes.data || []);
+        setMitraList(mitraRes.data || []);
+      } catch (err) {
+        console.error('Error fetching reports data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const totalTransaksi = useMemo(() => orders.reduce((sum, o) => sum + o.total_price, 0), [orders]);
+  const completedOrders = useMemo(() => orders.filter((o) => o.status === 'selesai_closed'), [orders]);
+
+  const mitraReport = useMemo(() => mitraList.map((m) => {
+    const mitraOrders = orders.filter(o => o.mitra_id === m.id);
+    const mTotal = mitraOrders.reduce((sum, o) => sum + o.total_price, 0);
+    const mOrders = mitraOrders.length;
+
+    return { 
+      nama: m.nama_toko, 
+      total: mTotal, 
+      komisi: mTotal * (m.komisi / 100), 
+      bersih: mTotal * (1 - m.komisi / 100), 
+      orders: mOrders,
+      initial: m.nama_toko.charAt(0)
+    };
+  }), [mitraList, orders]);
+
+  const totalKomisi = useMemo(() => orders.reduce((sum, o) => {
+    const mitra = mitraList.find(m => m.id === o.mitra_id);
+    const komisiPersen = mitra ? mitra.komisi : 20; // Default 20% jika mitra tidak ditemukan
+    return sum + (o.total_price * (komisiPersen / 100));
+  }, 0), [orders, mitraList]);
+
+  const totalBersih = totalTransaksi - totalKomisi;
+
+  const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#0ea5e9', '#6366f1'];
+
+  if (loading) {
+    return (
+      <div className="h-96 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+        <p className="text-slate-500 font-bold">Memuat laporan...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -51,9 +96,6 @@ export default function AdminReports() {
           <div className="flex items-center justify-between mb-4">
             <div className="h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
               <Receipt className="h-6 w-6" />
-            </div>
-            <div className="text-green-500 bg-green-50 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">
-              +15.4%
             </div>
           </div>
           <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1">Total Transaksi</p>
@@ -89,9 +131,6 @@ export default function AdminReports() {
             <div className="h-12 w-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors duration-300">
               <Activity className="h-6 w-6" />
             </div>
-            <div className="text-green-500 bg-green-50 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">
-              Stable
-            </div>
           </div>
           <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1">Order Selesai</p>
           <h3 className="text-3xl font-black text-slate-900">{completedOrders.length}</h3>
@@ -100,127 +139,103 @@ export default function AdminReports() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card className="lg:col-span-2 p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-blue-600" />
-              Perbandingan Pendapatan Mitra
-            </h3>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-blue-600"></div>
-                <span className="text-xs font-bold text-slate-500">Gross</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                <span className="text-xs font-bold text-slate-500">Net</span>
-              </div>
-            </div>
+          <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-blue-600" />
+            Analisis Pendapatan Mitra
+          </h3>
+          <div className="h-[400px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={mitraReport}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="nama" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} tickFormatter={(val) => `Rp${val/1000}k`} />
+                <Tooltip 
+                  cursor={{fill: '#f8fafc'}}
+                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                />
+                <Bar dataKey="total" radius={[8, 8, 0, 0]} barSize={40}>
+                  {mitraReport.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={mitraReport} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="nama" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} tickFormatter={(v) => `Rp${v/1000}k`} />
-              <Tooltip 
-                cursor={{ fill: '#f8fafc' }}
-                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
-                formatter={(value: number) => `Rp ${value.toLocaleString('id-ID')}`}
-              />
-              <Bar dataKey="total" name="Total Gross" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={32} />
-              <Bar dataKey="bersih" name="Bersih (Admin)" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
-            </BarChart>
-          </ResponsiveContainer>
         </Card>
 
-        <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
+        <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl overflow-hidden">
           <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-2">
             <PieChartIcon className="h-5 w-5 text-blue-600" />
-            Share Komisi Mitra
+            Share Pendapatan
           </h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={mitraReport} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={8} dataKey="komisi" stroke="none">
-                {mitraReport.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip 
-                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
-                formatter={(value: number) => `Rp ${value.toLocaleString('id-ID')}`}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-4 mt-6">
-            {mitraReport.map((m, i) => (
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={mitraReport}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="total"
+                >
+                  {mitraReport.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="space-y-4 mt-4 max-h-48 overflow-y-auto pr-2 no-scrollbar">
+            {mitraReport.map((m, index) => (
               <div key={m.nama} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                  <span className="text-xs font-bold text-slate-600">{m.nama}</span>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full" style={{backgroundColor: COLORS[index % COLORS.length]}}></div>
+                  <span className="text-sm font-bold text-slate-600">{m.nama}</span>
                 </div>
-                <span className="text-xs font-black text-slate-900">Rp {m.komisi.toLocaleString('id-ID')}</span>
+                <span className="text-sm font-black text-slate-900">{((m.total/totalTransaksi)*100).toFixed(1)}%</span>
               </div>
             ))}
           </div>
         </Card>
       </div>
 
-      <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl overflow-hidden">
-        <div className="flex items-center justify-between mb-8">
-          <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <FileDown className="h-5 w-5 text-blue-600" />
-            Detail Finansial per Mitra
-          </h3>
-        </div>
-        <div className="overflow-x-auto -mx-8 px-8">
+      <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
+        <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-2">
+          <Receipt className="h-5 w-5 text-blue-600" />
+          Rincian Mitra
+        </h3>
+        <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] border-b border-slate-50">
-                <th className="text-left py-4 px-2">Mitra Outlet</th>
-                <th className="text-center py-4 px-2">Total Order</th>
-                <th className="text-right py-4 px-2">Gross Revenue</th>
-                <th className="text-right py-4 px-2">Komisi Mitra</th>
-                <th className="text-right py-4 px-2">Net Profit</th>
-                <th className="text-right py-4 px-2">Margin</th>
+              <tr className="text-slate-400 text-xs font-black uppercase tracking-widest border-b border-slate-50">
+                <th className="text-left py-4 px-2">Mitra</th>
+                <th className="text-left py-4 px-2">Total Order</th>
+                <th className="text-left py-4 px-2">Total Omzet</th>
+                <th className="text-left py-4 px-2">Komisi (Payout)</th>
+                <th className="text-left py-4 px-2">Pendapatan Bersih</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {mitraReport.map((m) => (
                 <tr key={m.nama} className="group hover:bg-slate-50/50 transition-colors">
-                  <td className="py-5 px-2">
+                  <td className="py-4 px-2">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-blue-600 text-xs border border-slate-100 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                      <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-500">
                         {m.initial}
                       </div>
-                      <span className="font-bold text-slate-900 text-sm">{m.nama}</span>
+                      <span className="text-sm font-bold text-slate-900">{m.nama}</span>
                     </div>
                   </td>
-                  <td className="py-5 px-2 text-center">
-                    <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-black">{m.orders}</span>
-                  </td>
-                  <td className="py-5 px-2 text-right font-bold text-slate-900 text-sm">Rp {m.total.toLocaleString('id-ID')}</td>
-                  <td className="py-5 px-2 text-right font-bold text-orange-500 text-sm">Rp {m.komisi.toLocaleString('id-ID')}</td>
-                  <td className="py-5 px-2 text-right font-black text-green-600 text-sm">Rp {m.bersih.toLocaleString('id-ID')}</td>
-                  <td className="py-5 px-2 text-right">
-                    <div className="flex items-center justify-end gap-1 text-xs font-black text-slate-400">
-                      <ArrowUpRight className="h-3 w-3 text-green-500" />
-                      {((m.bersih / m.total) * 100).toFixed(1)}%
-                    </div>
-                  </td>
+                  <td className="py-4 px-2 text-sm font-bold text-slate-600">{m.orders}</td>
+                  <td className="py-4 px-2 text-sm font-black text-slate-900">Rp {m.total.toLocaleString('id-ID')}</td>
+                  <td className="py-4 px-2 text-sm font-bold text-orange-600">Rp {m.komisi.toLocaleString('id-ID')}</td>
+                  <td className="py-4 px-2 text-sm font-black text-blue-600">Rp {m.bersih.toLocaleString('id-ID')}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr className="bg-slate-900 text-white rounded-2xl overflow-hidden">
-                <td className="py-6 px-6 rounded-l-2xl font-black text-sm uppercase tracking-widest">Total Keseluruhan</td>
-                <td className="py-6 px-2 text-center font-black text-blue-400">{mitraReport.reduce((s, m) => s + m.orders, 0)}</td>
-                <td className="py-6 px-2 text-right font-black text-blue-400">Rp {totalTransaksi.toLocaleString('id-ID')}</td>
-                <td className="py-6 px-2 text-right font-black text-orange-400">Rp {totalKomisi.toLocaleString('id-ID')}</td>
-                <td className="py-6 px-2 text-right font-black text-green-400">Rp {totalBersih.toLocaleString('id-ID')}</td>
-                <td className="py-6 px-6 rounded-r-2xl text-right font-black text-slate-500">
-                  {((totalBersih / totalTransaksi) * 100).toFixed(1)}%
-                </td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       </Card>

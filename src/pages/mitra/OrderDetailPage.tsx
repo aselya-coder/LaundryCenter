@@ -1,16 +1,49 @@
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { mockOrders, mockStatusLogs } from '@/lib/mock-data';
+import { supabase } from '@/lib/supabase';
+import { Order } from '@/lib/types';
 import { OrderHeader } from '@/components/order/OrderHeader';
 import { OrderItems } from '@/components/order/OrderItems';
 import { PaymentInfo } from '@/components/order/PaymentInfo';
 import { ShippingInfo } from '@/components/order/ShippingInfo';
 import NotFound from '@/pages/NotFound';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 export default function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
-  const order = mockOrders.find((o) => o.id === orderId);
-  const statusLogs = mockStatusLogs.filter((log) => log.order_id === orderId);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOrder = async () => {
+      if (!orderId) return;
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', orderId)
+          .single();
+
+        if (error) throw error;
+        setOrder(data);
+      } catch (err) {
+        console.error('Error fetching order detail:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrder();
+  }, [orderId]);
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
 
   if (!order) {
     return <NotFound />;
@@ -29,7 +62,7 @@ export default function OrderDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
         <div className="lg:col-span-2 space-y-8">
           <OrderItems order={order} />
-          <ShippingInfo statusLogs={statusLogs} />
+          <ShippingInfo order={order} />
         </div>
         <div className="space-y-8">
           <PaymentInfo order={order} />

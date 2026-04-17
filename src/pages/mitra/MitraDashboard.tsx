@@ -1,22 +1,58 @@
-import { Package, DollarSign, Clock, Plus, ArrowRight, Wallet, History, Search, Activity, FileText, HelpCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Package, DollarSign, Clock, Plus, ArrowRight, Wallet, History, Search, Activity, FileText, HelpCircle, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/lib/auth-context';
-import { mockOrders } from '@/lib/mock-data';
+import { supabase } from '@/lib/supabase';
+import { Order } from '@/lib/types';
 import { Link } from 'react-router-dom';
 
 const today = new Date().toISOString().split('T')[0];
 
 export default function MitraDashboard() {
   const { mitra, user } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!mitra?.id) return;
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('mitra_id', mitra.id)
+          .order('updated_at', { ascending: false });
+
+        if (error) throw error;
+        setOrders(data || []);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [mitra?.id]);
+
   if (!mitra) return null;
 
-  const myOrders = mockOrders.filter((o) => o.mitra_id === mitra.id);
-  const ordersToday = myOrders.filter((o) => o.tanggal_masuk === today);
-  const activeOrders = myOrders.filter((o) => o.status !== 'selesai_closed');
-  const totalPendapatan = myOrders.reduce((sum, o) => sum + o.harga, 0);
+  const ordersToday = orders.filter((o) => o.updated_at.startsWith(today));
+  const activeOrders = orders.filter((o) => o.status !== 'selesai_closed');
+  const totalPendapatan = orders.reduce((sum, o) => sum + o.total_price, 0);
   const totalKomisi = totalPendapatan * (mitra.komisi / 100);
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="h-96 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+        <p className="text-slate-500 font-bold">Memuat dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">
@@ -96,22 +132,22 @@ export default function MitraDashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              {activeOrders.map((order) => (
+              {activeOrders.slice(0, 5).map((order) => (
                 <div key={order.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group">
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center shadow-sm font-black text-blue-600 text-xs group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                      {order.jenis === 'kiloan' ? 'KG' : 'PCS'}
+                      ID
                     </div>
                     <div>
-                      <p className="font-mono text-xs font-black text-blue-600 mb-0.5">{order.kode_order}</p>
-                      <p className="font-bold text-slate-900 text-sm">{order.customer_nama}</p>
+                      <p className="font-mono text-xs font-black text-blue-600 mb-0.5">#{order.id.slice(0, 8)}</p>
+                      <p className="font-bold text-slate-900 text-sm">{order.customer_name}</p>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                        {order.jenis} • {order.berat} {order.jenis === 'kiloan' ? 'kg' : 'item'}
+                        Update: {new Date(order.updated_at).toLocaleDateString('id-ID')}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-4 mt-4 sm:mt-0">
-                    <p className="font-black text-slate-900 text-sm">Rp {order.harga.toLocaleString('id-ID')}</p>
+                    <p className="font-black text-slate-900 text-sm">Rp {order.total_price.toLocaleString('id-ID')}</p>
                     <StatusBadge status={order.status} className="shadow-sm" />
                   </div>
                 </div>
@@ -127,10 +163,12 @@ export default function MitraDashboard() {
               Aksi Cepat
             </h3>
             <div className="space-y-3">
-              <Button variant="outline" className="w-full justify-start h-12 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 gap-3">
-                <Search className="h-5 w-5" />
-                Lacak Struk Customer
-              </Button>
+              <Link to="/tracking">
+                <Button variant="outline" className="w-full justify-start h-12 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 gap-3">
+                  <Search className="h-5 w-5" />
+                  Lacak Struk Customer
+                </Button>
+              </Link>
               <Button variant="outline" className="w-full justify-start h-12 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 gap-3">
                 <FileText className="h-5 w-5" />
                 Download Laporan

@@ -15,18 +15,21 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     
-    // Simulate loading
-    setTimeout(() => {
-      if (!login(email, password)) {
+    try {
+      const success = await login(email, password);
+      if (!success) {
         setError('Email atau password salah. Cek akun demo di bawah.');
-        setLoading(false);
       }
-    }, 800);
+    } catch (err) {
+      setError('Terjadi kesalahan saat login.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

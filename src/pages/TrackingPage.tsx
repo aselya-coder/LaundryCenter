@@ -3,23 +3,47 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
-import { mockOrders, mockStatusLogs, mockMitra } from '@/lib/mock-data';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, OrderStatus } from '@/lib/types';
-import { QrCode, Search, WashingMachine, CheckCircle2, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { supabase } from '@/lib/supabase';
+import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, Order } from '@/lib/types';
+import { QrCode, Search, WashingMachine, CheckCircle2, Clock, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 
 export default function TrackingPage() {
-  const [kode, setKode] = useState('');
+  const [idOrder, setIdOrder] = useState('');
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const order = mockOrders.find((o) => o.kode_order === kode);
-  const logs = order ? mockStatusLogs.filter((l) => l.order_id === order.id).sort((a, b) => a.timestamp.localeCompare(b.timestamp)) : [];
-  const mitra = order ? mockMitra.find((m) => m.id === order.mitra_id) : null;
-
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSearched(true);
+    if (!idOrder.trim()) return;
+
+    try {
+      setLoading(true);
+      setSearched(true);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, mitra(nama_toko)')
+        .eq('id', idOrder.trim())
+        .single();
+
+      if (error) {
+        setOrder(null);
+        if (error.code !== 'PGRST116') { // PGRST116 is code for no rows returned
+          console.error('Error tracking order:', error);
+          toast.error('Gagal melacak order');
+        }
+      } else {
+        setOrder(data);
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('Terjadi kesalahan sistem');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const currentIdx = order ? ORDER_STATUS_FLOW.indexOf(order.status) : -1;
@@ -48,31 +72,47 @@ export default function TrackingPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <Input
-              value={kode}
-              onChange={(e) => { setKode(e.target.value); setSearched(false); }}
-              placeholder="Masukkan Kode Order (e.g. LD-2025...)"
+              value={idOrder}
+              onChange={(e) => { setIdOrder(e.target.value); setSearched(false); }}
+              placeholder="Masukkan ID Order..."
               className="pl-10 h-12 text-lg font-mono border-slate-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl bg-white shadow-sm"
             />
           </div>
-          <Button type="submit" className="h-12 px-8 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-100 transition-all active:scale-95">
-            Lacak
+          <Button 
+            type="submit" 
+            disabled={loading}
+            className="h-12 px-8 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-100 transition-all active:scale-95 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Lacak'}
           </Button>
         </form>
 
-        {searched && !order && (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-            <Card className="p-12 text-center border-dashed border-2 bg-white rounded-3xl">
-              <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Search className="h-8 w-8 text-slate-400" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Order Tidak Ditemukan</h3>
-              <p className="text-slate-500 max-w-xs mx-auto">Kode order <strong>{kode}</strong> tidak terdaftar di sistem kami. Mohon cek kembali struk Anda.</p>
-            </Card>
-          </motion.div>
-        )}
+        <AnimatePresence mode="wait">
+          {searched && !order && !loading && (
+            <motion.div 
+              key="not-found"
+              initial={{ opacity: 0, scale: 0.95 }} 
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+            >
+              <Card className="p-12 text-center border-dashed border-2 bg-white rounded-3xl">
+                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search className="h-8 w-8 text-slate-400" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Order Tidak Ditemukan</h3>
+                <p className="text-slate-500 max-w-xs mx-auto">ID order <strong>{idOrder}</strong> tidak terdaftar di sistem kami. Mohon cek kembali struk Anda.</p>
+              </Card>
+            </motion.div>
+          )}
 
-        {order && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          {order && !loading && (
+            <motion.div 
+              key={order.id}
+              initial={{ opacity: 0, y: 10 }} 
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="space-y-6"
+            >
             <div className="grid md:grid-cols-3 gap-6">
               <Card className="md:col-span-2 p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5">
@@ -83,31 +123,23 @@ export default function TrackingPage() {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded">Order ID</span>
-                        <p className="font-mono text-xl font-black text-slate-900">{order.kode_order}</p>
+                        <p className="font-mono text-xl font-black text-slate-900">#{order.id.slice(0, 8)}</p>
                       </div>
-                      <p className="text-slate-600 font-medium">{order.customer_nama} <span className="text-slate-300 mx-2">|</span> {mitra?.nama_toko}</p>
+                      <p className="text-slate-600 font-medium">{order.customer_name} <span className="text-slate-300 mx-2">|</span> {order.mitra?.nama_toko || 'Pusat'}</p>
                     </div>
                     <StatusBadge status={order.status} className="h-10 px-6 text-sm font-bold rounded-full shadow-sm" />
                   </div>
                   
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="space-y-1">
-                      <p className="text-slate-400 text-xs font-semibold uppercase">Layanan</p>
-                      <p className="font-bold text-slate-900 capitalize">{order.jenis}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-slate-400 text-xs font-semibold uppercase">{order.jenis === 'kiloan' ? 'Berat' : 'Jumlah'}</p>
-                      <p className="font-bold text-slate-900">{order.berat} {order.jenis === 'kiloan' ? 'kg' : 'item'}</p>
-                    </div>
+                  <div className="grid grid-cols-2 gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
                     <div className="space-y-1">
                       <p className="text-slate-400 text-xs font-semibold uppercase">Total Bayar</p>
-                      <p className="font-bold text-blue-600">Rp {order.harga.toLocaleString('id-ID')}</p>
+                      <p className="font-bold text-blue-600">Rp {order.total_price.toLocaleString('id-ID')}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-slate-400 text-xs font-semibold uppercase">Estimasi</p>
+                      <p className="text-slate-400 text-xs font-semibold uppercase">Terakhir Update</p>
                       <div className="flex items-center gap-1 text-slate-900 font-bold">
                         <Clock className="h-3 w-3" />
-                        <span>3 Hari</span>
+                        <span>{new Date(order.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       </div>
                     </div>
                   </div>
@@ -119,7 +151,7 @@ export default function TrackingPage() {
                   <QrCode className="h-20 w-20 text-white" />
                 </div>
                 <p className="font-bold text-lg mb-1">Scan QR Tracking</p>
-                <p className="text-blue-100 text-xs">Simpan kode ini untuk mempermudah pengecekan status laundry Anda.</p>
+                <p className="text-blue-100 text-xs">Gunakan ID ini untuk mempermudah pengecekan status laundry Anda.</p>
               </Card>
             </div>
 
@@ -132,7 +164,6 @@ export default function TrackingPage() {
                 <div className="absolute left-[21px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
                 <div className="space-y-2">
                   {ORDER_STATUS_FLOW.map((status, i) => {
-                    const log = logs.find((l) => l.status === status);
                     const isCompleted = i <= currentIdx;
                     const isCurrent = i === currentIdx;
 
@@ -152,15 +183,15 @@ export default function TrackingPage() {
                             <p className={`text-base font-bold ${isCurrent ? 'text-blue-600' : 'text-slate-900'}`}>
                               {ORDER_STATUS_LABELS[status]}
                             </p>
-                            {log && (
+                            {isCurrent && (
                               <p className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded">
-                                {new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(order.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             )}
                           </div>
-                          {log && (
+                          {isCurrent && (
                             <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                              {new Date(log.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              {new Date(order.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                             </p>
                           )}
                         </div>

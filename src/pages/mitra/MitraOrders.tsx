@@ -3,56 +3,90 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
-import { useAuth } from '@/lib/auth-context';
-import { mockOrders as initialOrders } from '@/lib/mock-data';
-import { Order, OrderStatus } from '@/lib/types';
-import { Search, Calendar, User, Tag, DollarSign, Clock } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Order, OrderStatus, ORDER_STATUS_LABELS } from '@/lib/types';
+import { Search, Calendar, User, Tag, DollarSign, Clock, Loader2, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { NextActionCard } from '@/components/order/NextActionCard';
+import { toast } from 'sonner';
+import { useAuth } from '@/lib/auth-context';
 
 export default function MitraOrders() {
   const { mitra } = useAuth();
-  
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const savedOrders = localStorage.getItem('laundry-orders');
-      if (savedOrders) {
-        return JSON.parse(savedOrders);
-      }
-    } catch (error) {
-      console.error("Gagal memuat data order dari localStorage", error);
-    }
-    return initialOrders;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('laundry-orders', JSON.stringify(orders));
-  }, [orders]);
-
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  const handleUpdateStatus = (orderId: string, newStatus: OrderStatus) => {
-    setOrders((currentOrders) =>
-      currentOrders.map((order) =>
-        order.id === orderId ? { ...order, status: newStatus } : order
-      )
-    );
+  const fetchOrders = async () => {
+    if (!mitra?.id) return;
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('mitra_id', mitra.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+      setOrders(data || []);
+    } catch (err: any) {
+      console.error('Error fetching orders:', err);
+      setError(err.message);
+      toast.error('Gagal mengambil data order');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const myOrders = useMemo(() => {
-    if (!mitra) return [];
-    return orders.filter((o) => {
-      const isMyOrder = o.mitra_id === mitra.id;
-      const matchesSearch =
-        o.kode_order.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.customer_nama.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
-      return isMyOrder && matchesSearch && matchesStatus;
-    });
-  }, [mitra, orders, searchTerm, filterStatus]);
+  useEffect(() => {
+    fetchOrders();
+  }, [mitra?.id]);
 
-  if (!mitra) return null;
+  const handleUpdateStatus = async (order: Order) => {
+    const currentIdx = ['diterima_mitra', 'dikirim_ke_pusat', 'diproses', 'dicuci', 'dikeringkan', 'disetrika', 'selesai_pusat', 'dikirim_ke_mitra', 'siap_diambil', 'selesai_closed'].indexOf(order.status);
+    const nextStatus = currentIdx < 9 ? ['diterima_mitra', 'dikirim_ke_pusat', 'diproses', 'dicuci', 'dikeringkan', 'disetrika', 'selesai_pusat', 'dikirim_ke_mitra', 'siap_diambil', 'selesai_closed'][currentIdx + 1] as OrderStatus : null;
+
+    if (!nextStatus) return;
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: nextStatus, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      toast.success(`Status order diperbarui ke "${ORDER_STATUS_LABELS[nextStatus]}"`);
+      fetchOrders();
+    } catch (err: any) {
+      console.error('Error updating status:', err);
+      toast.error('Gagal memperbarui status order');
+    }
+  };
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const matchesSearch =
+        o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        o.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    });
+  }, [orders, searchTerm, filterStatus]);
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="h-96 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+        <p className="text-slate-500 font-bold">Memuat data order...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">
@@ -73,7 +107,7 @@ export default function MitraOrders() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
           <Input 
             className="pl-12 h-12 rounded-2xl border-none shadow-xl shadow-slate-200/50 bg-white font-semibold text-slate-600 focus-visible:ring-blue-500"
-            placeholder="Cari Kode Order atau Nama Customer..."
+            placeholder="Cari ID Order atau Nama Customer..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -95,8 +129,14 @@ export default function MitraOrders() {
         </div>
       </div>
 
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl font-bold text-sm">
+          Error: {error}
+        </div>
+      )}
+
       <div className="grid gap-6">
-        {myOrders.length === 0 ? (
+        {filteredOrders.length === 0 ? (
           <Card className="p-20 text-center border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
             <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
               <Search className="h-10 w-10 text-slate-300" />
@@ -105,18 +145,18 @@ export default function MitraOrders() {
             <p className="text-slate-500 font-medium">Coba gunakan kata kunci pencarian lain.</p>
           </Card>
         ) : (
-          myOrders.map((order) => (
+          filteredOrders.map((order) => (
             <Card key={order.id} className="p-0 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl overflow-hidden group hover:ring-2 hover:ring-blue-100 transition-all">
               <div className="flex flex-col md:flex-row">
                 <div className="p-8 flex-1">
                   <div className="flex items-center gap-3 mb-6">
                     <span className="font-mono text-xs font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-                      {order.kode_order}
+                      #{order.id.slice(0, 8)}
                     </span>
                     <StatusBadge status={order.status} className="shadow-sm" />
                     <div className="ml-auto flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(order.tanggal_masuk).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                      <Clock className="h-3 w-3" />
+                      {new Date(order.updated_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
 
@@ -125,28 +165,28 @@ export default function MitraOrders() {
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</p>
                       <div className="flex items-center gap-2">
                         <User className="h-3.5 w-3.5 text-blue-600" />
-                        <p className="text-sm font-bold text-slate-900">{order.customer_nama}</p>
+                        <p className="text-sm font-bold text-slate-900">{order.customer_name}</p>
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Layanan</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kontak</p>
                       <div className="flex items-center gap-2">
-                        <Tag className="h-3.5 w-3.5 text-blue-600" />
-                        <p className="text-sm font-bold text-slate-900 capitalize">{order.jenis} ({order.berat} {order.jenis === 'kiloan' ? 'kg' : 'item'})</p>
+                        <Phone className="h-3.5 w-3.5 text-blue-600" />
+                        <p className="text-sm font-bold text-slate-900">{order.customer_hp || '-'}</p>
                       </div>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Biaya</p>
                       <div className="flex items-center gap-2">
                         <DollarSign className="h-3.5 w-3.5 text-green-600" />
-                        <p className="text-sm font-black text-slate-900">Rp {order.harga.toLocaleString('id-ID')}</p>
+                        <p className="text-sm font-black text-slate-900">Rp {order.total_price.toLocaleString('id-ID')}</p>
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estimasi</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Terakhir Update</p>
                       <div className="flex items-center gap-2">
                         <Clock className="h-3.5 w-3.5 text-orange-500" />
-                        <p className="text-sm font-bold text-slate-900">3 Hari</p>
+                        <p className="text-sm font-bold text-slate-900">{new Date(order.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</p>
                       </div>
                     </div>
                   </div>
