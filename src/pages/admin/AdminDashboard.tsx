@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Package, DollarSign, Users, TrendingUp, ArrowUpRight, ArrowDownRight, Activity, MapPin, Loader2 } from 'lucide-react';
+import { Package, DollarSign, Users, TrendingUp, Activity, MapPin, Loader2, Receipt } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { StatusBadge } from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
-import { ORDER_STATUS_LABELS, OrderStatus, Order } from '@/lib/types';
+import { ORDER_STATUS_LABELS, Order } from '@/lib/types';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 
 const today = new Date().toISOString().split('T')[0];
@@ -11,22 +11,26 @@ const today = new Date().toISOString().split('T')[0];
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [mitraList, setMitraList] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [ordersRes, mitraRes] = await Promise.all([
+        const [ordersRes, mitraRes, expensesRes] = await Promise.all([
           supabase.from('orders').select('*'),
-          supabase.from('mitra').select('*')
+          supabase.from('mitra').select('*'),
+          supabase.from('expenses').select('*')
         ]);
 
         if (ordersRes.error) throw ordersRes.error;
         if (mitraRes.error) throw mitraRes.error;
+        if (expensesRes.error) throw expensesRes.error;
 
         setOrders(ordersRes.data || []);
         setMitraList(mitraRes.data || []);
+        setExpenses(expensesRes.data || []);
       } catch (err) {
         console.error('Error fetching admin dashboard data:', err);
       } finally {
@@ -42,25 +46,47 @@ export default function AdminDashboard() {
     const orderDate = o.updated_at.split('T')[0];
     return orderDate === today;
   }), [orders]);
-  const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + o.total_price, 0), [orders]);
+  
+  const totalRevenue = useMemo(() => orders.filter(o => o.is_paid).reduce((sum, o) => sum + o.total_price, 0), [orders]);
+  const totalExpenses = useMemo(() => expenses.reduce((sum, e) => sum + e.jumlah, 0), [expenses]);
+  const netProfit = totalRevenue - totalExpenses;
 
   const cityData = useMemo(() => mitraList.reduce((acc, m) => {
     acc[m.kota] = (acc[m.kota] || 0) + 1;
     return acc;
   }, {} as Record<string, number>), [mitraList]);
 
-  const cityChartData = useMemo(() => Object.entries(cityData).map(([kota, count]) => ({ name: kota, value: count })), [cityData]);
+  const cityChartData = useMemo(() => Object.entries(cityData).map(([kota, count]) => ({ name: String(kota), value: count as number })), [cityData]);
   const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#0ea5e9', '#6366f1'];
 
-  const revenueData = useMemo(() => [
-    { day: 'Sen', amount: totalRevenue * 0.1 },
-    { day: 'Sel', amount: totalRevenue * 0.15 },
-    { day: 'Rab', amount: totalRevenue * 0.12 },
-    { day: 'Kam', amount: totalRevenue * 0.2 },
-    { day: 'Jum', amount: totalRevenue * 0.18 },
-    { day: 'Sab', amount: totalRevenue * 0.25 },
-    { day: 'Min', amount: totalRevenue * 0.1 },
-  ], [totalRevenue]);
+  const revenueData = useMemo(() => {
+    // Generate data for last 7 days
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().split('T')[0];
+    });
+
+    const dayLabels = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+    return last7Days.map(date => {
+      const dayIndex = new Date(date).getDay();
+      const amount = orders
+        .filter(o => o.updated_at.split('T')[0] === date && o.is_paid)
+        .reduce((sum, o) => sum + o.total_price, 0);
+      
+      const expenseAmount = expenses
+        .filter(e => e.tanggal === date)
+        .reduce((sum, e) => sum + e.jumlah, 0);
+      
+      return {
+        day: dayLabels[dayIndex],
+        date: date,
+        revenue: amount,
+        expense: expenseAmount
+      };
+    });
+  }, [orders, expenses]);
 
   if (loading) {
     return (
@@ -101,8 +127,8 @@ export default function AdminDashboard() {
               <DollarSign className="h-6 w-6" />
             </div>
           </div>
-          <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Total Pendapatan</p>
-          <h3 className="text-2xl font-black text-slate-900">Rp {totalRevenue.toLocaleString('id-ID')}</h3>
+          <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Profit Bersih</p>
+          <h3 className="text-2xl font-black text-slate-900">Rp {netProfit.toLocaleString('id-ID')}</h3>
         </div>
 
         <div className="p-6 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-50 group hover:scale-[1.02] transition-transform duration-300">
@@ -120,12 +146,12 @@ export default function AdminDashboard() {
 
         <div className="p-6 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-50 group hover:scale-[1.02] transition-transform duration-300">
           <div className="flex items-center justify-between mb-4">
-            <div className="h-12 w-12 rounded-2xl bg-sky-50 flex items-center justify-center text-sky-600 group-hover:bg-sky-600 group-hover:text-white transition-colors duration-300">
-              <Activity className="h-6 w-6" />
+            <div className="h-12 w-12 rounded-2xl bg-red-50 flex items-center justify-center text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors duration-300">
+              <Receipt className="h-6 w-6" />
             </div>
           </div>
-          <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Total Order</p>
-          <h3 className="text-3xl font-black text-slate-900">{orders.length}</h3>
+          <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Total Pengeluaran</p>
+          <h3 className="text-2xl font-black text-slate-900">Rp {totalExpenses.toLocaleString('id-ID')}</h3>
         </div>
       </div>
 
@@ -134,16 +160,30 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-blue-600" />
-              Statistik Pendapatan
+              Performa Keuangan (7 Hari Terakhir)
             </h3>
+            <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest">
+              <div className="flex items-center gap-1.5 text-blue-600">
+                <div className="h-2 w-2 rounded-full bg-blue-600"></div>
+                Omzet
+              </div>
+              <div className="flex items-center gap-1.5 text-red-500">
+                <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                Pengeluaran
+              </div>
+            </div>
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={revenueData}>
                 <defs>
-                  <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -151,9 +191,13 @@ export default function AdminDashboard() {
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 600}} tickFormatter={(value) => `Rp ${value/1000}k`} />
                 <Tooltip 
                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
-                  formatter={(value: any) => [`Rp ${value.toLocaleString('id-ID')}`, 'Pendapatan']}
+                  formatter={(value: any, name: string) => [
+                    `Rp ${value.toLocaleString('id-ID')}`, 
+                    name === 'revenue' ? 'Omzet' : 'Pengeluaran'
+                  ]}
                 />
-                <Area type="monotone" dataKey="amount" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorAmount)" />
+                <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
+                <Area type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={4} fillOpacity={1} fill="url(#colorExpense)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -176,7 +220,7 @@ export default function AdminDashboard() {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {cityChartData.map((entry, index) => (
+                  {cityChartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

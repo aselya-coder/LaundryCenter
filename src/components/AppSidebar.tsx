@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   Settings,
   HelpCircle,
+  Receipt,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
@@ -36,6 +37,7 @@ const adminItems = [
   { title: 'Semua Order', url: '/admin/orders', icon: Package },
   { title: 'Kelola Mitra', url: '/admin/mitra', icon: Building2 },
   { title: 'Laporan Keuangan', url: '/admin/reports', icon: FileText },
+  { title: 'Pengeluaran', url: '/admin/expenses', icon: Receipt },
   { title: 'Daftar Akun', url: '/admin/accounts', icon: Users },
 ];
 

@@ -1,27 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, Order } from '@/lib/types';
-import { QrCode, Search, WashingMachine, CheckCircle2, Clock, Loader2, History } from 'lucide-react';
+import { QrCode, Search, WashingMachine, CheckCircle2, Clock, Loader2, History, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 export default function TrackingPage() {
-  const [idOrder, setIdOrder] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [idOrder, setIdOrder] = useState(searchParams.get('code') || '');
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!idOrder.trim()) return;
+  const performSearch = useCallback(async (code: string) => {
+    if (!code.trim()) return;
 
     // Bersihkan input: hapus karakter '#' jika ada dan ubah ke uppercase
-    const cleanCode = idOrder.trim().replace(/^#/, '').toUpperCase();
+    const cleanCode = code.trim().replace(/^#/, '').toUpperCase();
 
     try {
       setLoading(true);
@@ -46,6 +46,10 @@ export default function TrackingPage() {
           );
         }
         setOrder(data);
+        // Update URL if searched manually
+        if (searchParams.get('code') !== cleanCode) {
+          setSearchParams({ code: cleanCode }, { replace: true });
+        }
       }
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -53,9 +57,66 @@ export default function TrackingPage() {
     } finally {
       setLoading(false);
     }
+  }, [searchParams, setSearchParams]);
+
+  // Efek untuk handle parameter URL saat pertama kali load
+  useEffect(() => {
+    const codeFromUrl = searchParams.get('code');
+    if (codeFromUrl) {
+      performSearch(codeFromUrl);
+    }
+  }, []);
+
+  // Realtime Subscription
+  useEffect(() => {
+    if (!order?.id) return;
+
+    // Listen to changes on the specific order
+    const orderSubscription = supabase
+      .channel(`order-tracking-${order.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${order.id}`,
+        },
+        (payload) => {
+          console.log('Order status updated via realtime:', payload.new);
+          // Update status and updated_at directly from payload
+          setOrder((prev) => prev ? { 
+            ...prev, 
+            status: payload.new.status,
+            updated_at: payload.new.updated_at 
+          } : null);
+          
+          // Re-fetch order details to get the new history record
+          performSearch(order.kode_order);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(orderSubscription);
+    };
+  }, [order?.id, order?.kode_order, performSearch]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    performSearch(idOrder);
+  };
+
+  const clearSearch = () => {
+    setIdOrder('');
+    setOrder(null);
+    setSearched(false);
+    setSearchParams({}, { replace: true });
   };
 
   const currentIdx = order ? ORDER_STATUS_FLOW.indexOf(order.status) : -1;
+  const trackingUrl = order ? `${window.location.origin}/tracking?code=${order.kode_order}` : '';
+  const qrCodeUrl = trackingUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(trackingUrl)}` : '';
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -82,14 +143,23 @@ export default function TrackingPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <Input
               value={idOrder}
-              onChange={(e) => { setIdOrder(e.target.value); setSearched(false); }}
+              onChange={(e) => { setIdOrder(e.target.value); if(searched && !e.target.value) setSearched(false); }}
               placeholder="Masukkan Kode Tracking (contoh: LD-2026...)"
-              className="pl-10 h-12 text-lg font-mono border-slate-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl bg-white shadow-sm"
+              className="pl-10 pr-10 h-12 text-lg font-mono border-slate-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl bg-white shadow-sm"
             />
+            {idOrder && (
+              <button 
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            )}
           </div>
           <Button 
             type="submit" 
-            disabled={loading}
+            disabled={loading || !idOrder.trim()}
             className="h-12 px-8 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-100 transition-all active:scale-95 disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Lacak'}
@@ -152,15 +222,33 @@ export default function TrackingPage() {
                       </div>
                     </div>
                   </div>
+
+                  {order.items_detail && order.items_detail.length > 0 && (
+                    <div className="mt-8 pt-6 border-t border-slate-100">
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-4">Detail Item Cucian</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {order.items_detail.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+                            <span className="text-sm font-bold text-slate-700">{item.item}</span>
+                            <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">x{item.qty}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
 
               <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-blue-600 text-white rounded-3xl flex flex-col items-center justify-center text-center">
-                <div className="bg-white/20 p-4 rounded-2xl mb-4 backdrop-blur-md border border-white/20">
-                  <QrCode className="h-20 w-20 text-white" />
+                <div className="bg-white p-2 rounded-2xl mb-4 shadow-lg ring-4 ring-blue-500/30">
+                  {qrCodeUrl ? (
+                    <img src={qrCodeUrl} alt="QR Tracking" className="h-32 w-32 rounded-lg" />
+                  ) : (
+                    <QrCode className="h-32 w-32 text-blue-600" />
+                  )}
                 </div>
                 <p className="font-bold text-lg mb-1">Scan QR Tracking</p>
-                <p className="text-blue-100 text-xs">Gunakan ID ini untuk mempermudah pengecekan status laundry Anda.</p>
+                <p className="text-blue-100 text-xs px-2">Gunakan kode ini untuk akses cepat status laundry Anda dari smartphone.</p>
               </Card>
             </div>
 

@@ -1,24 +1,49 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Order, ORDER_STATUS_LABELS } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { ArrowLeft, User, Phone, MapPin, Calendar, Tag, Weight, ReceiptText, Clock, CheckCircle2, History } from 'lucide-react';
+import { ArrowLeft, User, Phone, MapPin, Calendar, Tag, Weight, ReceiptText, Clock, CheckCircle2, History, Wallet, CreditCard, Printer, DollarSign, Package, MessageSquare } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { useReactToPrint } from 'react-to-print';
+import { ThermalReceipt } from '@/components/order/ThermalReceipt';
 
 export default function OrderDetailPage() {
   const { orderId: id } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: receiptRef,
+  });
+
+  const handleWhatsAppNotify = () => {
+    if (!order) return;
+    
+    const trackingUrl = `${window.location.origin}/tracking?code=${order.kode_order}`;
+    let message = '';
+    
+    if (order.status === 'siap_diambil') {
+      message = `Halo ${order.customer_name}, laundry Anda dengan kode *#${order.kode_order}* sudah *SIAP DIAMBIL* di ${order.mitra?.nama_toko || 'outlet kami'}.\n\nTotal Biaya: Rp ${order.total_price.toLocaleString('id-ID')}\nStatus Bayar: ${order.is_paid ? 'LUNAS' : 'BELUM BAYAR'}\n\nLacak detailnya di sini: ${trackingUrl}\n\nTerima kasih!`;
+    } else {
+      message = `Halo ${order.customer_name}, laundry Anda dengan kode *#${order.kode_order}* saat ini berstatus: *${ORDER_STATUS_LABELS[order.status]}*.\n\nLacak status terbaru di sini: ${trackingUrl}\n\nTerima kasih!`;
+    }
+
+    const phone = order.customer_hp?.replace(/\D/g, '');
+    const cleanPhone = phone?.startsWith('0') ? '62' + phone.slice(1) : phone;
+    
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
   const fetchOrder = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('orders')
-        .select('*, order_history(*)')
+        .select('*, order_history(*), mitra(nama_toko)')
         .eq('id', id)
         .single();
 
@@ -43,6 +68,31 @@ export default function OrderDetailPage() {
     if (id) fetchOrder();
   }, [id]);
 
+  // Realtime Subscription
+  useEffect(() => {
+    if (!id) return;
+
+    const orderSubscription = supabase
+      .channel(`order-detail-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          fetchOrder(); // Re-fetch on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(orderSubscription);
+    };
+  }, [id]);
+
   if (loading) {
     return (
       <div className="h-96 flex items-center justify-center">
@@ -62,6 +112,9 @@ export default function OrderDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-20">
+      {/* Hidden Thermal Receipt */}
+      {order && <ThermalReceipt ref={receiptRef} order={order} mitraName={order.mitra?.nama_toko} />}
+
       <div className="flex items-center gap-4">
         <Link to="/mitra/orders">
           <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl bg-white shadow-sm border border-slate-100 text-slate-500 hover:text-blue-600">
@@ -120,6 +173,24 @@ export default function OrderDetailPage() {
                     )}
                   </div>
                 </div>
+
+                {order.items_detail && order.items_detail.length > 0 && (
+                  <div className="space-y-4 pt-2">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <Package className="h-3 w-3" /> Detail Item
+                    </h3>
+                    <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                      <div className="grid grid-cols-1 gap-2">
+                        {order.items_detail.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center text-sm">
+                            <span className="font-bold text-slate-700">{item.item}</span>
+                            <span className="font-black text-blue-600 bg-white px-2 py-0.5 rounded-md border border-blue-100">x{item.qty}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-6">
@@ -201,33 +272,41 @@ export default function OrderDetailPage() {
 
         {/* Payment Summary */}
         <div className="space-y-6">
-          <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-blue-600 text-white rounded-[2rem] relative overflow-hidden">
+          <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-slate-900 text-white rounded-[2rem] relative overflow-hidden">
             <div className="relative z-10 space-y-6">
-              <h3 className="text-lg font-black flex items-center gap-2 uppercase tracking-wider">
-                <ReceiptText className="h-5 w-5 text-blue-200" />
-                Rincian Biaya
-              </h3>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center text-blue-400">
+                  <ReceiptText className="h-5 w-5" />
+                </div>
+                <h3 className="text-xl font-bold">Pembayaran</h3>
+              </div>
               
               <div className="space-y-4">
                 <div className="flex justify-between items-center text-blue-100">
-                  <span className="text-xs font-bold uppercase tracking-widest">Harga Dasar</span>
-                  <span className="font-black">{order.jenis === 'kiloan' ? 'Rp 7.000 / kg' : 'Custom'}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest">Harga Total</span>
+                  <span className="text-2xl font-black text-white">Rp {order.total_price.toLocaleString('id-ID')}</span>
                 </div>
-                {order.jenis === 'kiloan' && (
-                  <div className="flex justify-between items-center text-blue-100">
-                    <span className="text-xs font-bold uppercase tracking-widest">Berat Total</span>
-                    <span className="font-black">{order.berat} kg</span>
+                
+                <div className="flex justify-between items-center py-3 border-t border-white/10">
+                  <span className="text-xs font-bold uppercase tracking-widest text-blue-200">Status</span>
+                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${order.is_paid ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                    {order.is_paid ? 'LUNAS' : 'BELUM BAYAR'}
+                  </span>
+                </div>
+
+                {order.is_paid && (
+                  <div className="flex justify-between items-center py-3 border-t border-white/10">
+                    <span className="text-xs font-bold uppercase tracking-widest text-blue-200">Metode</span>
+                    <div className="flex items-center gap-2 text-white">
+                      {order.payment_method === 'tunai' ? <Wallet className="h-3 w-3" /> : <CreditCard className="h-3 w-3" />}
+                      <span className="text-xs font-black uppercase">{order.payment_method}</span>
+                    </div>
                   </div>
                 )}
-                <Separator className="bg-white/20" />
-                <div className="space-y-1">
-                  <span className="text-xs font-bold uppercase tracking-widest text-blue-200">Total Dibayar</span>
-                  <p className="text-4xl font-black">Rp {order.total_price.toLocaleString('id-ID')}</p>
-                </div>
               </div>
             </div>
             <div className="absolute -right-8 -bottom-8 opacity-10">
-              <ReceiptText className="h-40 w-40 text-white" />
+              <DollarSign className="h-40 w-40 text-white" />
             </div>
           </Card>
 
@@ -238,16 +317,27 @@ export default function OrderDetailPage() {
               </div>
               <div>
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-1">Lokasi Outlet</p>
-                <p className="font-bold text-slate-900 text-sm">{order.mitra?.nama_toko || 'Pusat Laundry'}</p>
+                <p className="font-bold text-slate-900 text-sm">{order.mitra?.nama_toko || 'Outlet Mitra'}</p>
               </div>
             </div>
           </Card>
 
           <Button 
-            className="w-full h-14 rounded-2xl font-black bg-slate-900 hover:bg-slate-800 text-white shadow-lg transition-all active:scale-95"
-            onClick={() => window.print()}
+            className="w-full h-14 rounded-2xl font-black bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-100 transition-all active:scale-95 gap-2"
+            onClick={() => handlePrint()}
           >
-            CETAK NOTA
+            <Printer className="h-5 w-5" />
+            CETAK STRUK
+          </Button>
+
+          <Button 
+            variant="outline"
+            className="w-full h-14 rounded-2xl font-black border-green-200 text-green-600 hover:bg-green-50 shadow-sm transition-all active:scale-95 gap-2"
+            onClick={handleWhatsAppNotify}
+            disabled={!order.customer_hp}
+          >
+            <MessageSquare className="h-5 w-5" />
+            KIRIM NOTIFIKASI WA
           </Button>
         </div>
       </div>

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Order, OrderStatus } from '@/lib/types';
+import { Order, OrderStatus, STATUS_RESPONSIBILITY } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, ChevronRight, ArrowRight } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ArrowRight, Clock } from 'lucide-react';
 
 // Mendefinisikan siklus hidup lengkap sebuah pesanan
 const allStatuses: OrderStatus[] = [
@@ -66,12 +66,15 @@ export function NextActionCard({ order, onUpdateStatus }: NextActionCardProps) {
     );
   }
 
+  // Cek apakah tanggung jawab mitra untuk status selanjutnya
+  const isMitraResponsibility = nextStatus && STATUS_RESPONSIBILITY[nextStatus] === 'mitra';
+
   // Tampilan jika ada aksi selanjutnya
   return (
     <div className="bg-slate-50 p-6 md:w-56 flex flex-col justify-center items-start gap-4 border-l border-slate-100">
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aksi Selanjutnya</p>
       
-      {nextStatus && (
+      {nextStatus && isMitraResponsibility ? (
         <Button 
           onClick={handleUpdateClick}
           disabled={isUpdating}
@@ -82,7 +85,12 @@ export function NextActionCard({ order, onUpdateStatus }: NextActionCardProps) {
             {!isUpdating && <ArrowRight className="h-4 w-4" />}
           </div>
         </Button>
-      )}
+      ) : nextStatus ? (
+        <div className="w-full p-4 rounded-xl bg-slate-200/50 border border-slate-200 flex flex-col items-center gap-2 text-center">
+          <Clock className="h-5 w-5 text-slate-400" />
+          <p className="text-[10px] font-bold text-slate-500 uppercase leading-tight">Menunggu Proses Pusat</p>
+        </div>
+      ) : null}
 
       <Link to={`/mitra/orders/${order.id}`} className="h-10 rounded-xl font-bold text-xs text-slate-500 hover:bg-slate-200/50 w-full gap-1 flex items-center justify-center mt-auto">
         Lihat Detail <ChevronRight className="h-3 w-3" />

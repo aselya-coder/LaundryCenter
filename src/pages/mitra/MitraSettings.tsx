@@ -30,10 +30,27 @@ export default function MitraSettings() {
 
   if (!mitra) return null;
 
-  const handleSaveMitra = () => {
-    // In a real app, update Supabase here
-    toast.success('Informasi toko berhasil diperbarui!');
-    setIsEditing(false);
+  const handleSaveMitra = async () => {
+    try {
+      const { error } = await supabase
+        .from('mitra')
+        .update({
+          nama_toko: mitraForm.nama_toko,
+          alamat: mitraForm.alamat,
+          kota: mitraForm.kota,
+        })
+        .eq('id', mitra.id);
+
+      if (error) throw error;
+
+      toast.success('Informasi toko berhasil diperbarui!');
+      setIsEditing(false);
+      // Optional: reload page to sync context or update context manually
+      window.location.reload(); 
+    } catch (err: any) {
+      console.error('Error updating mitra info:', err);
+      toast.error(err.message || 'Gagal memperbarui informasi toko');
+    }
   };
 
   const handleGantiPassword = async () => {

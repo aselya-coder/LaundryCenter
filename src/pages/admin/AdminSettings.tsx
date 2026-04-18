@@ -1,377 +1,301 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { useAuth } from '@/lib/auth-context';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
-import { User, Shield, Bell, Globe, Save, LogOut, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Service } from '@/lib/types';
 import { toast } from 'sonner';
+import { PlusCircle, Edit2, Trash2, Save, X, Loader2, Tag, DollarSign, Package } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export default function AdminSettings() {
-  const { user, logout } = useAuth();
-  const [isEditing, setIsEditing] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    nama: user?.nama || '',
-    email: user?.email || '',
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openDialog, setOpenOpenDialog] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [form, setForm] = useState({
+    nama: '',
+    harga: '',
+    satuan: 'kg' as 'kg' | 'pcs',
+    kategori: 'kiloan' as 'kiloan' | 'satuan',
+    aktif: true
   });
 
-  // Password change states
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [showPass, setShowPass] = useState(false);
-  const [showConfirmPass, setShowConfirmPass] = useState(false);
-  const [passwords, setPasswords] = useState({
-    new: '',
-    confirm: ''
-  });
+  const fetchServices = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('kategori', { ascending: true });
 
-  const handleSaveProfile = () => {
-    // In a real app, you would call an API here
-    toast.success('Profil berhasil diperbarui!');
-    setIsEditing(false);
+      if (error) throw error;
+      setServices(data || []);
+    } catch (err: any) {
+      console.error('Error fetching services:', err);
+      toast.error('Gagal mengambil data layanan');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleGantiPassword = async () => {
-    if (!passwords.new || !passwords.confirm) {
-      toast.error('Mohon isi semua field password');
-      return;
-    }
+  useEffect(() => {
+    fetchServices();
+  }, []);
 
-    if (passwords.new.length < 6) {
-      toast.error('Password minimal 6 karakter');
-      return;
-    }
-
-    if (passwords.new !== passwords.confirm) {
-      toast.error('Konfirmasi password tidak cocok');
+  const handleSave = async () => {
+    if (!form.nama || !form.harga) {
+      toast.error('Mohon lengkapi data layanan');
       return;
     }
 
     try {
-      setPasswordLoading(true);
-      const { error } = await supabase.auth.updateUser({
-        password: passwords.new
-      });
+      // Cek apakah nama layanan sudah ada (untuk mencegah duplikat)
+      const isDuplicate = services.some(s => 
+        s.nama.toLowerCase() === form.nama.toLowerCase() && 
+        (!editingService || s.id !== editingService.id)
+      );
 
-      if (error) throw error;
+      if (isDuplicate) {
+        toast.error(`Layanan dengan nama "${form.nama}" sudah ada.`);
+        return;
+      }
 
-      toast.success('Password berhasil diperbarui!');
-      setShowPasswordDialog(false);
-      setPasswords({ new: '', confirm: '' });
+      if (editingService) {
+        const { error } = await supabase
+          .from('services')
+          .update({
+            nama: form.nama,
+            harga: Number(form.harga),
+            satuan: form.satuan,
+            kategori: form.kategori,
+            aktif: form.aktif
+          })
+          .eq('id', editingService.id);
+        
+        if (error) throw error;
+        toast.success('Layanan berhasil diperbarui');
+      } else {
+        const { error } = await supabase
+          .from('services')
+          .insert([{
+            nama: form.nama,
+            harga: Number(form.harga),
+            satuan: form.satuan,
+            kategori: form.kategori,
+            aktif: true
+          }]);
+        
+        if (error) throw error;
+        toast.success('Layanan baru berhasil ditambahkan');
+      }
+      
+      fetchServices();
+      setOpenOpenDialog(false);
+      resetForm();
     } catch (err: any) {
-      console.error('Error updating password:', err);
-      toast.error(err.message || 'Gagal memperbarui password');
-    } finally {
-      setPasswordLoading(false);
+      console.error('Error saving service:', err);
+      toast.error(err.message || 'Gagal menyimpan layanan');
     }
   };
 
-  const handleToggleNotification = (type: string) => {
-    toast.success(`Notifikasi ${type} diperbarui`);
+  const resetForm = () => {
+    setForm({
+      nama: '',
+      harga: '',
+      satuan: 'kg',
+      kategori: 'kiloan',
+      aktif: true
+    });
+    setEditingService(null);
+  };
+
+  const handleEdit = (service: Service) => {
+    setEditingService(service);
+    setForm({
+      nama: service.nama,
+      harga: String(service.harga),
+      satuan: service.satuan,
+      kategori: service.kategori,
+      aktif: service.aktif
+    });
+    setOpenOpenDialog(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus layanan ini?')) return;
+
+    try {
+      const { error } = await supabase.from('services').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Layanan berhasil dihapus');
+      fetchServices();
+    } catch (err: any) {
+      toast.error('Gagal menghapus layanan');
+    }
   };
 
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Pengaturan Admin</h1>
-          <p className="text-slate-500 font-medium text-lg">Kelola konfigurasi sistem dan akun administrator</p>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Pengaturan Sistem</h1>
+          <p className="text-slate-500 font-medium">Kelola daftar layanan, harga, dan konfigurasi aplikasi</p>
         </div>
         <Button 
-          variant="outline" 
-          onClick={logout}
-          className="rounded-2xl h-12 px-6 font-bold border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700 gap-2 transition-all active:scale-95"
+          onClick={() => { resetForm(); setOpenOpenDialog(true); }}
+          className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-12 px-6 shadow-lg shadow-blue-100 font-bold gap-2 transition-all active:scale-95"
         >
-          <LogOut className="h-5 w-5" />
-          Keluar Akun
+          <PlusCircle className="h-5 w-5" />
+          Tambah Layanan
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Profile Section */}
-        <Card className="lg:col-span-2 p-8 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border-none relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-            <User className="h-32 w-32" />
-          </div>
-          
-          <div className="flex items-center justify-between mb-8 relative z-10">
-            <div className="flex items-center gap-4">
-              <div className="h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shadow-inner">
-                <User className="h-7 w-7" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-slate-900">Profil Administrator</h3>
-                <p className="text-slate-400 text-sm font-medium">Informasi personal akun Anda</p>
-              </div>
+      <div className="grid grid-cols-1 gap-8">
+        <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+              <Tag className="h-5 w-5" />
             </div>
-            {!isEditing ? (
-              <Button 
-                variant="ghost" 
-                onClick={() => setIsEditing(true)}
-                className="font-bold text-blue-600 hover:bg-blue-50 rounded-xl"
-              >
-                Edit Profil
-              </Button>
-            ) : (
-              <div className="flex gap-2">
-                <Button 
-                  variant="ghost" 
-                  onClick={() => setIsEditing(false)}
-                  className="font-bold text-slate-400 hover:bg-slate-50 rounded-xl"
-                >
-                  Batal
-                </Button>
-                <Button 
-                  onClick={handleSaveProfile}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl gap-2 px-6"
-                >
-                  <Save className="h-4 w-4" />
-                  Simpan
-                </Button>
-              </div>
-            )}
+            <h3 className="text-xl font-bold text-slate-900">Manajemen Layanan & Harga</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-            <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Nama Lengkap</Label>
-              {isEditing ? (
-                <Input 
-                  value={profileForm.nama} 
-                  onChange={(e) => setProfileForm({...profileForm, nama: e.target.value})}
-                  className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold focus-visible:ring-blue-500"
-                />
-              ) : (
-                <div className="h-12 flex items-center px-4 bg-slate-50 rounded-xl font-bold text-slate-700 border border-transparent">
-                  {user?.nama}
-                </div>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Email Administrator</Label>
-              {isEditing ? (
-                <Input 
-                  value={profileForm.email} 
-                  onChange={(e) => setProfileForm({...profileForm, email: e.target.value})}
-                  className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold focus-visible:ring-blue-500"
-                />
-              ) : (
-                <div className="h-12 flex items-center px-4 bg-slate-50 rounded-xl font-bold text-slate-700 border border-transparent">
-                  {user?.email}
-                </div>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Hak Akses / Role</Label>
-              <div className="flex items-center gap-2">
-                <span className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-[0.2em] shadow-lg shadow-blue-100">
-                  {user?.role}
-                </span>
-                <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 italic">
-                  <CheckCircle2 className="h-3 w-3 text-green-500" />
-                  Verified Admin Account
-                </span>
-              </div>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-slate-400 text-xs font-black uppercase tracking-widest border-b border-slate-50">
+                  <th className="text-left py-4 px-2">Nama Layanan</th>
+                  <th className="text-left py-4 px-2">Kategori</th>
+                  <th className="text-left py-4 px-2">Harga</th>
+                  <th className="text-left py-4 px-2">Satuan</th>
+                  <th className="text-left py-4 px-2">Status</th>
+                  <th className="text-right py-4 px-2">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="py-20 text-center">
+                      <Loader2 className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-2" />
+                      <p className="text-slate-400 font-bold text-sm">Memuat data layanan...</p>
+                    </td>
+                  </tr>
+                ) : services.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-20 text-center text-slate-400 font-medium">
+                      Belum ada layanan yang terdaftar.
+                    </td>
+                  </tr>
+                ) : (
+                  services.map((service) => (
+                    <tr key={service.id} className="group hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 px-2 font-bold text-slate-900">{service.nama}</td>
+                      <td className="py-4 px-2">
+                        <Badge variant="outline" className={`rounded-lg font-black uppercase text-[10px] tracking-widest ${service.kategori === 'kiloan' ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-purple-600 bg-purple-50 border-purple-100'}`}>
+                          {service.kategori}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-2 font-black text-slate-900">Rp {service.harga.toLocaleString('id-ID')}</td>
+                      <td className="py-4 px-2 text-slate-500 font-bold text-sm">per {service.satuan}</td>
+                      <td className="py-4 px-2">
+                        <Badge className={`rounded-lg px-3 py-1 font-black uppercase text-[10px] tracking-widest border-none ${service.aktif ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                          {service.aktif ? 'Aktif' : 'Nonaktif'}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-2 text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(service)} className="h-9 w-9 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50">
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(service.id)} className="h-9 w-9 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </Card>
+      </div>
 
-        {/* Security & Quick Actions */}
-        <div className="space-y-6">
-          <Card className="p-8 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border-none group">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="h-12 w-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors duration-300">
-                <Shield className="h-6 w-6" />
+      <Dialog open={openDialog} onOpenChange={setOpenOpenDialog}>
+        <DialogContent className="sm:max-w-md rounded-[2.5rem] border-none shadow-2xl p-8">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-slate-900">
+              {editingService ? 'Edit Layanan' : 'Tambah Layanan Baru'}
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium">
+              Atur nama, kategori, dan harga layanan laundry
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Nama Layanan</Label>
+              <div className="relative">
+                <Package className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Input 
+                  value={form.nama} 
+                  onChange={(e) => setForm({...form, nama: e.target.value})}
+                  className="pl-12 h-14 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-blue-500 font-semibold transition-all shadow-sm"
+                  placeholder="e.g. Cuci Lipat Reguler"
+                />
               </div>
-              <h3 className="text-xl font-bold text-slate-900">Keamanan</h3>
             </div>
-            <p className="text-slate-500 text-sm mb-8 leading-relaxed">
-              Kelola otentikasi dua faktor dan ubah password administrator secara berkala.
-            </p>
-            <Button 
-              onClick={() => setShowPasswordDialog(true)}
-              className="w-full h-14 rounded-2xl font-bold bg-slate-50 text-slate-900 hover:bg-slate-100 border-none transition-all active:scale-95"
-            >
-              Ubah Password Sekarang
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Kategori</Label>
+                <select 
+                  value={form.kategori}
+                  onChange={(e) => setForm({...form, kategori: e.target.value as any, satuan: e.target.value === 'kiloan' ? 'kg' : 'pcs'})}
+                  className="w-full h-14 rounded-2xl border-slate-100 bg-slate-50 px-4 font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="kiloan">Kiloan</option>
+                  <option value="satuan">Satuan</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Satuan</Label>
+                <select 
+                  value={form.satuan}
+                  onChange={(e) => setForm({...form, satuan: e.target.value as any})}
+                  className="w-full h-14 rounded-2xl border-slate-100 bg-slate-50 px-4 font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="kg">Per Kilogram (kg)</option>
+                  <option value="pcs">Per Potong (pcs)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Harga Layanan (Rp)</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Input 
+                  type="number"
+                  value={form.harga} 
+                  onChange={(e) => setForm({...form, harga: e.target.value})}
+                  className="pl-12 h-14 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-blue-500 font-semibold transition-all shadow-sm"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4 gap-3">
+            <Button variant="ghost" onClick={() => setOpenOpenDialog(false)} className="rounded-xl font-bold h-12">Batal</Button>
+            <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-widest text-xs px-8 h-12 shadow-lg shadow-blue-100">
+              Simpan Layanan
             </Button>
-          </Card>
-
-          <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-            <DialogContent className="sm:max-w-md rounded-3xl border-none shadow-2xl p-8">
-              <DialogHeader className="mb-6">
-                <DialogTitle className="text-2xl font-black text-slate-900">Ubah Password</DialogTitle>
-                <DialogDescription className="text-slate-500 font-medium text-sm">
-                  Gunakan password yang kuat untuk keamanan akun administrator Anda.
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Password Baru</Label>
-                  <div className="relative">
-                    <Input 
-                      type={showPass ? 'text' : 'password'}
-                      value={passwords.new}
-                      onChange={(e) => setPasswords({...passwords, new: e.target.value})}
-                      className="h-12 rounded-xl bg-slate-50 border-none font-bold pr-12" 
-                      placeholder="Minimal 6 karakter"
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => setShowPass(!showPass)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      {showPass ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Konfirmasi Password</Label>
-                  <div className="relative">
-                    <Input 
-                      type={showConfirmPass ? 'text' : 'password'}
-                      value={passwords.confirm}
-                      onChange={(e) => setPasswords({...passwords, confirm: e.target.value})}
-                      className="h-12 rounded-xl bg-slate-50 border-none font-bold pr-12" 
-                      placeholder="Ulangi password baru"
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => setShowConfirmPass(!showConfirmPass)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      {showConfirmPass ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <DialogFooter className="mt-8">
-                <Button 
-                  onClick={handleGantiPassword} 
-                  disabled={passwordLoading}
-                  className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-black uppercase tracking-widest text-xs gap-2"
-                >
-                  {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simpan Password Baru'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Card className="p-8 bg-slate-900 text-white rounded-3xl shadow-xl shadow-slate-200/50 border-none relative overflow-hidden group">
-            <div className="relative z-10">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 backdrop-blur-md">
-                  <Globe className="h-6 w-6" />
-                </div>
-                <h3 className="text-xl font-bold">Status Sistem</h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-400 font-medium">Server Jakarta</span>
-                  <span className="flex items-center gap-1.5 text-green-400 font-bold">
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
-                    Online
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-400 font-medium">Supabase DB</span>
-                  <span className="flex items-center gap-1.5 text-green-400 font-bold">
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
-                    Connected
-                  </span>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  className="w-full h-10 rounded-xl font-bold text-slate-400 hover:bg-white/10 hover:text-white transition-all text-xs uppercase tracking-widest mt-2"
-                >
-                  Lihat Log Aktivitas
-                </Button>
-              </div>
-            </div>
-            <div className="absolute -right-8 -bottom-8 opacity-10">
-              <Globe className="h-32 w-32" />
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <Card className="p-8 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border-none group">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="h-12 w-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors duration-300">
-              <Bell className="h-6 w-6" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900">Notifikasi Sistem</h3>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-              <div>
-                <p className="text-sm font-bold text-slate-900">Email Report Harian</p>
-                <p className="text-xs text-slate-400">Terima ringkasan transaksi setiap pagi</p>
-              </div>
-              <Button 
-                variant="ghost" 
-                onClick={() => handleToggleNotification('Harian')}
-                className="text-xs font-black text-blue-600 hover:bg-white"
-              >
-                AKTIF
-              </Button>
-            </div>
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-              <div>
-                <p className="text-sm font-bold text-slate-900">Alert Error Sistem</p>
-                <p className="text-xs text-slate-400">Pemberitahuan real-time jika ada anomali</p>
-              </div>
-              <Button 
-                variant="ghost" 
-                onClick={() => handleToggleNotification('Error')}
-                className="text-xs font-black text-blue-600 hover:bg-white"
-              >
-                AKTIF
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-8 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border-none group">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="h-12 w-12 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300">
-              <Shield className="h-6 w-6" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900">Log Login Terakhir</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400">
-                  Chrome
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-900">Jakarta, Indonesia</p>
-                  <p className="text-[10px] text-slate-400">IP: 182.253.xx.xx</p>
-                </div>
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">Sekarang</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400">
-                  Safari
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-900">Bandung, Indonesia</p>
-                  <p className="text-[10px] text-slate-400">IP: 114.125.xx.xx</p>
-                </div>
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">2 Jam Lalu</span>
-            </div>
-          </div>
-        </Card>
-      </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

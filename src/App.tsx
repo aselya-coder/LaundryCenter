@@ -12,6 +12,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminMitra from "./pages/admin/AdminMitra";
 import AdminReports from "./pages/admin/AdminReports";
+import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminAccounts from "./pages/admin/AdminAccounts";
 import MitraDashboard from "./pages/mitra/MitraDashboard";
@@ -58,6 +59,7 @@ const App = () => (
             <Route path="/admin/orders" element={<ProtectedRoute role="admin"><AdminOrders /></ProtectedRoute>} />
             <Route path="/admin/mitra" element={<ProtectedRoute role="admin"><AdminMitra /></ProtectedRoute>} />
             <Route path="/admin/reports" element={<ProtectedRoute role="admin"><AdminReports /></ProtectedRoute>} />
+            <Route path="/admin/expenses" element={<ProtectedRoute role="admin"><AdminExpenses /></ProtectedRoute>} />
             <Route path="/admin/accounts" element={<ProtectedRoute role="admin"><AdminAccounts /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute role="admin"><AdminSettings /></ProtectedRoute>} />
 

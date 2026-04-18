@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
-import { Order, OrderStatus, ORDER_STATUS_LABELS } from '@/lib/types';
-import { Search, Calendar, User, Tag, DollarSign, Clock, Loader2, Phone } from 'lucide-react';
+import { Order, OrderStatus, ORDER_STATUS_LABELS, STATUS_RESPONSIBILITY } from '@/lib/types';
+import { Search, Calendar, User, Tag, DollarSign, Clock, Loader2, Phone, Share2, ExternalLink, Package, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { NextActionCard } from '@/components/order/NextActionCard';
 import { toast } from 'sonner';
@@ -44,11 +44,26 @@ export default function MitraOrders() {
     fetchOrders();
   }, [mitra?.id]);
 
+  // Statistik untuk Ringkasan Mitra
+  const stats = useMemo(() => {
+    const active = orders.filter(o => o.status !== 'selesai_closed').length;
+    const ready = orders.filter(o => o.status === 'siap_diambil').length;
+    const unpaid = orders.filter(o => !o.is_paid).reduce((sum, o) => sum + o.total_price, 0);
+    
+    return { active, ready, unpaid };
+  }, [orders]);
+
   const handleUpdateStatus = async (order: Order) => {
     const currentIdx = ['diterima_mitra', 'dikirim_ke_pusat', 'diproses', 'dicuci', 'dikeringkan', 'disetrika', 'selesai_pusat', 'dikirim_ke_mitra', 'siap_diambil', 'selesai_closed'].indexOf(order.status);
     const nextStatus = currentIdx < 9 ? ['diterima_mitra', 'dikirim_ke_pusat', 'diproses', 'dicuci', 'dikeringkan', 'disetrika', 'selesai_pusat', 'dikirim_ke_mitra', 'siap_diambil', 'selesai_closed'][currentIdx + 1] as OrderStatus : null;
 
     if (!nextStatus) return;
+
+    // Logika pembatasan: Mitra hanya bisa mengubah status jika itu tanggung jawab Mitra
+    if (STATUS_RESPONSIBILITY[nextStatus] !== 'mitra') {
+      toast.error(`Status "${ORDER_STATUS_LABELS[nextStatus]}" adalah tanggung jawab Pusat.`);
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -78,9 +93,48 @@ export default function MitraOrders() {
     }
   };
 
+  const handleTogglePayment = async (order: Order) => {
+    try {
+      const newPaidStatus = !order.is_paid;
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          is_paid: newPaidStatus,
+          payment_method: newPaidStatus ? (order.payment_method || 'tunai') : null,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      toast.success(`Pembayaran berhasil ditandai sebagai ${newPaidStatus ? 'LUNAS' : 'BELUM BAYAR'}`);
+      fetchOrders();
+    } catch (err: any) {
+      console.error('Error updating payment:', err);
+      toast.error('Gagal memperbarui status pembayaran');
+    }
+  };
+
+  const handleShare = (order: Order) => {
+    const trackingUrl = `${window.location.origin}/tracking?code=${order.kode_order}`;
+    const text = `Halo ${order.customer_name}, Anda dapat memantau status cucian Anda di LaundryCenter melalui link berikut: ${trackingUrl}`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: 'Lacak Laundry Anda',
+        text: text,
+        url: trackingUrl
+      }).catch(console.error);
+    } else {
+      navigator.clipboard.writeText(text);
+      toast.success('Link tracking disalin ke clipboard');
+    }
+  };
+
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       const matchesSearch =
+        o.kode_order?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         o.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
@@ -99,16 +153,58 @@ export default function MitraOrders() {
 
   return (
     <div className="space-y-8 pb-10">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Riwayat Order</h1>
-          <p className="text-slate-500 font-medium">Pantau seluruh transaksi dan status cucian customer Anda</p>
+          <p className="text-slate-500 font-medium">Pantau dan kelola semua pesanan laundry di outlet Anda</p>
         </div>
         <Link to="/mitra/new-order">
           <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-12 px-6 shadow-lg shadow-blue-100 font-bold gap-2 transition-all active:scale-95">
             Buat Order Baru
           </Button>
         </Link>
+      </div>
+
+      {/* Ringkasan Dashboard Mitra */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <Card className="p-6 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl group overflow-hidden relative">
+          <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
+            <Package className="h-24 w-24 text-blue-600" />
+          </div>
+          <div className="relative z-10">
+            <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 mb-4">
+              <Package className="h-5 w-5" />
+            </div>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Cucian Diproses</p>
+            <h3 className="text-3xl font-black text-slate-900">{stats.active} <span className="text-sm text-slate-400 font-bold">Order</span></h3>
+          </div>
+        </Card>
+
+        <Card className="p-6 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl group overflow-hidden relative">
+          <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
+            <CheckCircle2 className="h-24 w-24 text-green-600" />
+          </div>
+          <div className="relative z-10">
+            <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 mb-4">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Siap Diambil</p>
+            <h3 className="text-3xl font-black text-slate-900">{stats.ready} <span className="text-sm text-slate-400 font-bold">Order</span></h3>
+          </div>
+        </Card>
+
+        <Card className="p-6 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl group overflow-hidden relative">
+          <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
+            <AlertCircle className="h-24 w-24 text-red-600" />
+          </div>
+          <div className="relative z-10">
+            <div className="h-10 w-10 rounded-xl bg-red-50 flex items-center justify-center text-red-600 mb-4">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Belum Dibayar</p>
+            <h3 className="text-3xl font-black text-slate-900">Rp {stats.unpaid.toLocaleString('id-ID')}</h3>
+          </div>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -159,13 +255,34 @@ export default function MitraOrders() {
               <div className="flex flex-col md:flex-row">
                 <div className="p-8 flex-1">
                   <div className="flex items-center gap-3 mb-6">
-                    <span className="font-mono text-xs font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-                      #{order.id.slice(0, 8)}
+                    <span className="font-mono text-xs font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 uppercase">
+                      #{order.kode_order || order.id.slice(0, 8)}
                     </span>
                     <StatusBadge status={order.status} className="shadow-sm" />
-                    <div className="ml-auto flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      <Clock className="h-3 w-3" />
-                      {new Date(order.updated_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleShare(order)}
+                        className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                        title="Bagikan Link Tracking"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                      <Link to={`/tracking?code=${order.kode_order}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                          title="Buka Halaman Tracking"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <div className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">
+                        <Clock className="h-3 w-3" />
+                        {new Date(order.updated_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </div>
                     </div>
                   </div>
 
@@ -186,9 +303,18 @@ export default function MitraOrders() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Biaya</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 group/pay">
                         <DollarSign className="h-3.5 w-3.5 text-green-600" />
-                        <p className="text-sm font-black text-slate-900">Rp {order.total_price.toLocaleString('id-ID')}</p>
+                        <p className="text-sm font-bold text-slate-900">Rp {order.total_price.toLocaleString('id-ID')}</p>
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ml-1 ${order.is_paid ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                          {order.is_paid ? 'LUNAS' : 'BELUM'}
+                        </span>
+                        <button 
+                          onClick={() => handleTogglePayment(order)}
+                          className="text-[8px] font-bold text-slate-400 hover:text-blue-600 opacity-0 group-hover/pay:opacity-100 transition-opacity ml-1"
+                        >
+                          Ubah
+                        </button>
                       </div>
                     </div>
                     <div className="space-y-1">

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, OrderStatus, Order } from '@/lib/types';
+import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, STATUS_RESPONSIBILITY, OrderStatus, Order } from '@/lib/types';
 import { toast } from 'sonner';
 import { Search, Filter, User, CheckCircle2, Clock, Loader2, Phone, MapPin, History, Eye, ReceiptText, Calendar, Tag, Weight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -97,6 +97,12 @@ export default function AdminOrders() {
     const nextStatus = getNextStatus(order.status);
     if (!nextStatus) return;
 
+    // Logika pembatasan: Admin hanya bisa mengubah status jika itu tanggung jawab Admin
+    if (STATUS_RESPONSIBILITY[nextStatus] !== 'admin') {
+      toast.error(`Status "${ORDER_STATUS_LABELS[nextStatus]}" adalah tanggung jawab Mitra.`);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('orders')
@@ -125,6 +131,31 @@ export default function AdminOrders() {
     } catch (err: any) {
       console.error('Error updating status:', err);
       toast.error('Gagal memperbarui status order');
+    }
+  };
+
+  const handleTogglePayment = async (order: Order) => {
+    try {
+      const newPaidStatus = !order.is_paid;
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          is_paid: newPaidStatus,
+          payment_method: newPaidStatus ? (order.payment_method || 'tunai') : null,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      toast.success(`Pembayaran berhasil ditandai sebagai ${newPaidStatus ? 'LUNAS' : 'BELUM BAYAR'}`);
+      fetchOrders();
+      if (selectedOrder && selectedOrder.id === order.id) {
+        fetchOrderDetail(order.id);
+      }
+    } catch (err: any) {
+      console.error('Error updating payment:', err);
+      toast.error('Gagal memperbarui status pembayaran');
     }
   };
 
@@ -252,21 +283,33 @@ export default function AdminOrders() {
                         </div>
                       </div>
 
-                      <div className="p-6 bg-slate-50 rounded-2xl flex flex-col justify-center border border-slate-100">
+                      <div className="p-6 bg-slate-50 rounded-2xl flex flex-col justify-center border border-slate-100 relative group/pay">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Pembayaran</p>
-                        <p className="text-2xl font-black text-blue-600">Rp {order.total_price.toLocaleString('id-ID')}</p>
+                        <p className="text-2xl font-black text-blue-600 mb-2">Rp {order.total_price.toLocaleString('id-ID')}</p>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-widest ${order.is_paid ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                            {order.is_paid ? `LUNAS (${order.payment_method})` : 'BELUM BAYAR'}
+                          </span>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleTogglePayment(order)}
+                            className="h-6 px-2 text-[10px] font-bold text-slate-400 hover:text-blue-600 opacity-0 group-hover/pay:opacity-100 transition-opacity"
+                          >
+                            Ubah
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className={`p-8 lg:w-72 flex flex-col justify-center gap-4 transition-colors ${nextStatus ? 'bg-blue-600 text-white' : 'bg-slate-50'}`}>
-                    {nextStatus ? (
+                  <div className={`p-8 lg:w-72 flex flex-col justify-center gap-4 transition-colors ${nextStatus && STATUS_RESPONSIBILITY[nextStatus] === 'admin' ? 'bg-blue-600 text-white' : 'bg-slate-50'}`}>
+                    {nextStatus && STATUS_RESPONSIBILITY[nextStatus] === 'admin' ? (
                       <>
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-200">Aksi Selanjutnya</p>
                         <Button 
                           className="w-full bg-white text-blue-600 hover:bg-blue-50 h-14 rounded-2xl font-black text-sm gap-2 shadow-xl shadow-blue-900/20 transition-all active:scale-95"
                           onClick={() => handleUpdateStatus(order)}
-                          disabled={order.status === 'selesai_closed'}
                         >
                           <CheckCircle2 className="h-5 w-5" />
                           {ORDER_STATUS_LABELS[nextStatus]}
@@ -275,11 +318,15 @@ export default function AdminOrders() {
                       </>
                     ) : (
                       <div className="text-center">
-                        <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <CheckCircle2 className="h-6 w-6 text-green-500" />
+                        <div className={`h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-3 ${order.status === 'selesai_closed' ? 'bg-green-100' : 'bg-slate-200'}`}>
+                          <CheckCircle2 className={`h-6 w-6 ${order.status === 'selesai_closed' ? 'text-green-500' : 'text-slate-400'}`} />
                         </div>
-                        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">Selesai</p>
-                        <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase">Order telah diselesaikan</p>
+                        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">
+                          {order.status === 'selesai_closed' ? 'Selesai' : 'Menunggu Mitra'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase">
+                          {order.status === 'selesai_closed' ? 'Order telah diselesaikan' : 'Status selanjutnya diupdate oleh mitra'}
+                        </p>
                       </div>
                     )}
                   </div>

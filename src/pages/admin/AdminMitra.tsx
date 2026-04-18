@@ -29,11 +29,36 @@ export default function AdminMitra() {
   const fetchMitra = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      // Menggunakan fetch manual dua tahap agar tidak error 400 saat join gagal di database
+      const { data: mitraData, error: mitraError } = await supabase
         .from('mitra')
-        .select('*, user:profiles(nama)');
-      if (error) throw error;
-      setMitraList(data || []);
+        .select('*');
+      
+      if (mitraError) throw mitraError;
+      
+      if (!mitraData || mitraData.length === 0) {
+        setMitraList([]);
+        return;
+      }
+
+      // Ambil user_id yang ada untuk mengambil nama owner dari tabel profiles
+      const userIds = mitraData.map(m => m.user_id).filter(Boolean);
+      
+      if (userIds.length > 0) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('id, nama')
+          .in('id', userIds);
+        
+        // Gabungkan data mitra dengan data profil (nama owner)
+        const mappedData = mitraData.map(m => ({
+          ...m,
+          user: profileData?.find(p => p.id === m.user_id) || { nama: 'Unknown Owner' }
+        }));
+        setMitraList(mappedData);
+      } else {
+        setMitraList(mitraData.map(m => ({ ...m, user: { nama: 'No Owner' } })));
+      }
     } catch (err) {
       console.error('Error fetching mitra:', err);
       toast.error('Gagal mengambil data mitra');
