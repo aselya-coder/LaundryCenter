@@ -3,8 +3,10 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth-context';
-import { User, Shield, Bell, Globe, Save, LogOut, CheckCircle2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { User, Shield, Bell, Globe, Save, LogOut, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminSettings() {
@@ -15,14 +17,55 @@ export default function AdminSettings() {
     email: user?.email || '',
   });
 
+  // Password change states
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passwords, setPasswords] = useState({
+    new: '',
+    confirm: ''
+  });
+
   const handleSaveProfile = () => {
     // In a real app, you would call an API here
     toast.success('Profil berhasil diperbarui!');
     setIsEditing(false);
   };
 
-  const handleGantiPassword = () => {
-    toast.info('Fitur ganti password sedang dikembangkan');
+  const handleGantiPassword = async () => {
+    if (!passwords.new || !passwords.confirm) {
+      toast.error('Mohon isi semua field password');
+      return;
+    }
+
+    if (passwords.new.length < 6) {
+      toast.error('Password minimal 6 karakter');
+      return;
+    }
+
+    if (passwords.new !== passwords.confirm) {
+      toast.error('Konfirmasi password tidak cocok');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      const { error } = await supabase.auth.updateUser({
+        password: passwords.new
+      });
+
+      if (error) throw error;
+
+      toast.success('Password berhasil diperbarui!');
+      setShowPasswordDialog(false);
+      setPasswords({ new: '', confirm: '' });
+    } catch (err: any) {
+      console.error('Error updating password:', err);
+      toast.error(err.message || 'Gagal memperbarui password');
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const handleToggleNotification = (type: string) => {
@@ -137,22 +180,86 @@ export default function AdminSettings() {
 
         {/* Security & Quick Actions */}
         <div className="space-y-6">
-          <Card className="p-8 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border-none group hover:ring-2 hover:ring-orange-100 transition-all">
+          <Card className="p-8 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border-none group">
             <div className="flex items-center gap-4 mb-6">
               <div className="h-12 w-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors duration-300">
                 <Shield className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-bold text-slate-900">Keamanan</h3>
             </div>
-            <p className="text-slate-500 text-sm mb-6 leading-relaxed">Kelola otentikasi dua faktor dan ubah password administrator secara berkala.</p>
+            <p className="text-slate-500 text-sm mb-8 leading-relaxed">
+              Kelola otentikasi dua faktor dan ubah password administrator secara berkala.
+            </p>
             <Button 
-              variant="outline" 
-              onClick={handleGantiPassword}
-              className="w-full h-12 rounded-xl font-bold border-slate-100 text-slate-600 hover:bg-slate-50 hover:text-orange-600 gap-2 transition-all"
+              onClick={() => setShowPasswordDialog(true)}
+              className="w-full h-14 rounded-2xl font-bold bg-slate-50 text-slate-900 hover:bg-slate-100 border-none transition-all active:scale-95"
             >
               Ubah Password Sekarang
             </Button>
           </Card>
+
+          <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+            <DialogContent className="sm:max-w-md rounded-3xl border-none shadow-2xl p-8">
+              <DialogHeader className="mb-6">
+                <DialogTitle className="text-2xl font-black text-slate-900">Ubah Password</DialogTitle>
+                <DialogDescription className="text-slate-500 font-medium text-sm">
+                  Gunakan password yang kuat untuk keamanan akun administrator Anda.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Password Baru</Label>
+                  <div className="relative">
+                    <Input 
+                      type={showPass ? 'text' : 'password'}
+                      value={passwords.new}
+                      onChange={(e) => setPasswords({...passwords, new: e.target.value})}
+                      className="h-12 rounded-xl bg-slate-50 border-none font-bold pr-12" 
+                      placeholder="Minimal 6 karakter"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPass ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Konfirmasi Password</Label>
+                  <div className="relative">
+                    <Input 
+                      type={showConfirmPass ? 'text' : 'password'}
+                      value={passwords.confirm}
+                      onChange={(e) => setPasswords({...passwords, confirm: e.target.value})}
+                      className="h-12 rounded-xl bg-slate-50 border-none font-bold pr-12" 
+                      placeholder="Ulangi password baru"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowConfirmPass(!showConfirmPass)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showConfirmPass ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="mt-8">
+                <Button 
+                  onClick={handleGantiPassword} 
+                  disabled={passwordLoading}
+                  className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-black uppercase tracking-widest text-xs gap-2"
+                >
+                  {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simpan Password Baru'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Card className="p-8 bg-slate-900 text-white rounded-3xl shadow-xl shadow-slate-200/50 border-none relative overflow-hidden group">
             <div className="relative z-10">

@@ -1,32 +1,60 @@
 import { useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { WashingMachine, Lock, Mail, ArrowRight, ShieldCheck, Store, Info, ArrowLeft } from 'lucide-react';
+import { WashingMachine, Lock, Mail, ArrowRight, User, Info, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
-export default function LoginPage() {
-  const { login } = useAuth();
+export default function RegisterPage() {
+  const navigate = useNavigate();
+  const [nama, setNama] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
+
     try {
-      const success = await login(email, password);
-      if (!success) {
-        setError('Email atau password salah. Silakan periksa kembali kredensial Anda.');
+      // 1. Sign up user di Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: nama,
+          }
+        }
+      });
+
+      if (authError) throw authError;
+
+      if (authData.user) {
+        // 2. Simpan profil ke tabel 'profiles' kita
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: authData.user.id,
+            nama: nama,
+            email: email,
+            role: 'mitra' // Default role sebagai mitra
+          }]);
+
+        if (profileError) throw profileError;
+
+        toast.success('Registrasi berhasil! Silakan cek email untuk verifikasi.');
+        navigate('/login');
       }
-    } catch (err) {
-      setError('Terjadi kesalahan saat login.');
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      setError(err.message || 'Gagal melakukan registrasi.');
     } finally {
       setLoading(false);
     }
@@ -36,11 +64,11 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden p-4">
       {/* Back Button */}
       <Link 
-        to="/" 
+        to="/login" 
         className="absolute top-8 left-8 z-20 flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100"
       >
         <ArrowLeft className="h-4 w-4" />
-        Kembali ke Beranda
+        Kembali ke Login
       </Link>
 
       {/* Decorative Background */}
@@ -59,12 +87,28 @@ export default function LoginPage() {
           <Link to="/" className="inline-flex items-center justify-center h-20 w-20 rounded-3xl bg-blue-600 shadow-2xl shadow-blue-200 mb-6 group hover:rotate-12 transition-transform duration-300">
             <WashingMachine className="h-10 w-10 text-white" />
           </Link>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">LaundryCenter</h1>
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Sistem Manajemen Laundry Terpusat</p>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">Daftar Akun</h1>
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Bergabunglah dengan Jaringan LaundryCenter</p>
         </div>
 
         <Card className="p-10 border-none shadow-2xl shadow-slate-200/50 bg-white rounded-[2.5rem]">
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleRegister} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="nama" className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Nama Lengkap</Label>
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Input
+                  id="nama"
+                  type="text"
+                  placeholder="Masukkan nama lengkap Anda"
+                  className="pl-12 h-14 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-blue-500 font-semibold transition-all"
+                  value={nama}
+                  onChange={(e) => setNama(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Alamat Email</Label>
               <div className="relative">
@@ -82,16 +126,13 @@ export default function LoginPage() {
             </div>
             
             <div className="space-y-2">
-              <div className="flex items-center justify-between ml-1">
-                <Label htmlFor="password" className="text-xs font-black uppercase tracking-widest text-slate-400">Kata Sandi</Label>
-                <button type="button" className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-700">Lupa Password?</button>
-              </div>
+              <Label htmlFor="password" className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Kata Sandi</Label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Minimal 6 karakter"
                   className="pl-12 h-14 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-blue-500 font-semibold transition-all"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -116,7 +157,7 @@ export default function LoginPage() {
                 <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 <>
-                  Masuk ke Dashboard
+                  Daftar Sekarang
                   <ArrowRight className="h-5 w-5" />
                 </>
               )}
@@ -125,42 +166,11 @@ export default function LoginPage() {
 
           <div className="mt-8 pt-6 border-t border-slate-50 text-center">
             <p className="text-sm text-slate-500 font-bold">
-              Belum punya akun?{' '}
-              <Link to="/register" className="text-blue-600 hover:text-blue-700 underline decoration-2 underline-offset-4">
-                Daftar Sekarang
+              Sudah punya akun?{' '}
+              <Link to="/login" className="text-blue-600 hover:text-blue-700 underline decoration-2 underline-offset-4">
+                Masuk di sini
               </Link>
             </p>
-          </div>
-
-          <div className="mt-10 pt-8 border-t border-slate-50">
-            <div className="flex items-center gap-2 mb-4 ml-1">
-              <ShieldCheck className="h-4 w-4 text-blue-600" />
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Akun Demo Akses Cepat</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                type="button"
-                className="group p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all text-left"
-                onClick={() => { setEmail('admin@laundry.com'); setPassword(''); }}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
-                  <p className="font-black text-slate-900 text-xs uppercase tracking-wider">Admin Pusat</p>
-                </div>
-                <p className="text-[10px] font-bold text-slate-400 group-hover:text-blue-600 truncate transition-colors">admin@laundry.com</p>
-              </button>
-              <button
-                type="button"
-                className="group p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all text-left"
-                onClick={() => { setEmail('budi@mitra.com'); setPassword(''); }}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <Store className="h-3.5 w-3.5 text-orange-500" />
-                  <p className="font-black text-slate-900 text-xs uppercase tracking-wider">Mitra Outlet</p>
-                </div>
-                <p className="text-[10px] font-bold text-slate-400 group-hover:text-blue-600 truncate transition-colors">budi@mitra.com</p>
-              </button>
-            </div>
           </div>
         </Card>
         

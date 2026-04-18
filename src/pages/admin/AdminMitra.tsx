@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { Mitra } from '@/lib/types';
 import { PlusCircle, MapPin, Percent, Search, Edit2, Power, Store, Loader2 } from 'lucide-react';
@@ -16,12 +16,22 @@ export default function AdminMitra() {
   const [searchTerm, setSearchTerm] = useState('');
   const [open, setOpen] = useState(false);
   const [editingMitra, setEditingMitra] = useState<Mitra | null>(null);
-  const [form, setForm] = useState({ nama_toko: '', alamat: '', kota: '', komisi: '20' });
+  const [form, setForm] = useState({ 
+    nama_toko: '', 
+    alamat: '', 
+    kota: '', 
+    komisi: '20',
+    email: '',
+    password: '',
+    nama_owner: ''
+  });
 
   const fetchMitra = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.from('mitra').select('*');
+      const { data, error } = await supabase
+        .from('mitra')
+        .select('*, user:profiles(nama)');
       if (error) throw error;
       setMitraList(data || []);
     } catch (err) {
@@ -47,7 +57,8 @@ export default function AdminMitra() {
   const handleSave = async () => {
     try {
       if (editingMitra) {
-        const { error } = await supabase
+        // Update profil di tabel mitra
+        const { error: mitraError } = await supabase
           .from('mitra')
           .update({
             nama_toko: form.nama_toko,
@@ -57,12 +68,45 @@ export default function AdminMitra() {
           })
           .eq('id', editingMitra.id);
         
-        if (error) throw error;
+        if (mitraError) throw mitraError;
+
+        // Update nama owner di tabel profiles jika ada user_id
+        if (editingMitra.user_id && form.nama_owner) {
+          const { error: userError } = await supabase
+            .from('profiles')
+            .update({ nama: form.nama_owner })
+            .eq('id', editingMitra.user_id);
+          
+          if (userError) throw userError;
+        }
+
         toast.success('Data mitra berhasil diperbarui');
       } else {
-        const { error } = await supabase
+        // 1. Validasi form
+        if (!form.email || !form.password || !form.nama_owner) {
+          toast.error('Mohon isi email, password, dan nama owner untuk mitra baru');
+          return;
+        }
+
+        // 2. Buat profil di tabel profiles (Akses Login)
+        // Catatan: Di sistem produksi, gunakan Supabase Edge Function untuk membuat user Auth tanpa logout
+        const { data: newUser, error: userError } = await supabase
+          .from('profiles')
+          .insert([{
+            nama: form.nama_owner,
+            email: form.email,
+            role: 'mitra'
+          }])
+          .select()
+          .single();
+        
+        if (userError) throw userError;
+
+        // 3. Buat profil di tabel mitra
+        const { error: mitraError } = await supabase
           .from('mitra')
           .insert([{
+            user_id: newUser.id,
             nama_toko: form.nama_toko,
             alamat: form.alamat,
             kota: form.kota,
@@ -70,19 +114,27 @@ export default function AdminMitra() {
             aktif: true,
           }]);
         
-        if (error) throw error;
-        toast.success('Mitra baru berhasil ditambahkan');
+        if (mitraError) throw mitraError;
+        toast.success('Akun mitra baru berhasil dibuat');
       }
       fetchMitra();
       resetForm();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving mitra:', err);
-      toast.error('Gagal menyimpan data mitra');
+      toast.error(err.message || 'Gagal menyimpan data mitra');
     }
   };
 
   const resetForm = () => {
-    setForm({ nama_toko: '', alamat: '', kota: '', komisi: '20' });
+    setForm({ 
+      nama_toko: '', 
+      alamat: '', 
+      kota: '', 
+      komisi: '20',
+      email: '',
+      password: '',
+      nama_owner: ''
+    });
     setEditingMitra(null);
     setOpen(false);
   };
@@ -94,6 +146,9 @@ export default function AdminMitra() {
       alamat: mitra.alamat,
       kota: mitra.kota,
       komisi: String(mitra.komisi),
+      nama_owner: mitra.user?.nama || '',
+      email: '', // Email dan password tidak dapat diubah di sini
+      password: ''
     });
     setOpen(true);
   };
@@ -142,25 +197,55 @@ export default function AdminMitra() {
               <DialogTitle className="text-2xl font-black text-slate-900">
                 {editingMitra ? 'Edit Data Mitra' : 'Tambah Mitra Baru'}
               </DialogTitle>
-              <p className="text-slate-500 font-medium text-sm">Lengkapi informasi outlet di bawah ini</p>
+              <DialogDescription className="text-slate-500 font-medium text-sm">
+                Lengkapi informasi outlet di bawah ini
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nama Toko/Outlet</Label>
-                <Input value={form.nama_toko} onChange={(e) => setForm({...form, nama_toko: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" placeholder="Contoh: Laundry Express" />
+            <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 no-scrollbar">
+              <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4 mb-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">Informasi Akun Login</p>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nama Owner / User</Label>
+                  <Input value={form.nama_owner} onChange={(e) => setForm({...form, nama_owner: e.target.value})} className="h-12 rounded-xl bg-white border-none font-bold shadow-sm" placeholder="Nama Lengkap Owner" />
+                </div>
+                {!editingMitra && (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Email Akun</Label>
+                      <Input type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="h-12 rounded-xl bg-white border-none font-bold shadow-sm" placeholder="email@mitra.com" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Password Sementara</Label>
+                      <Input type="password" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="h-12 rounded-xl bg-white border-none font-bold shadow-sm" placeholder="Minimal 6 karakter" />
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Kota</Label>
-                <Input value={form.kota} onChange={(e) => setForm({...form, kota: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" placeholder="Contoh: Jakarta" />
+              
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Detail Toko / Outlet</p>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nama Toko/Outlet</Label>
+                  <Input value={form.nama_toko} onChange={(e) => setForm({...form, nama_toko: e.target.value})} className="h-12 rounded-xl bg-white border-none font-bold shadow-sm" placeholder="Contoh: Laundry Express" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Kota</Label>
+                  <Input value={form.kota} onChange={(e) => setForm({...form, kota: e.target.value})} className="h-12 rounded-xl bg-white border-none font-bold shadow-sm" placeholder="Contoh: Jakarta" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Alamat Lengkap</Label>
+                  <Input value={form.alamat} onChange={(e) => setForm({...form, alamat: e.target.value})} className="h-12 rounded-xl bg-white border-none font-bold shadow-sm" placeholder="Jl. Raya No. 123..." />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Persentase Komisi (%)</Label>
+                  <Input type="number" value={form.komisi} onChange={(e) => setForm({...form, komisi: e.target.value})} className="h-12 rounded-xl bg-white border-none font-bold shadow-sm" placeholder="20" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Alamat Lengkap</Label>
-                <Input value={form.alamat} onChange={(e) => setForm({...form, alamat: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" placeholder="Jl. Raya No. 123..." />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Persentase Komisi (%)</Label>
-                <Input type="number" value={form.komisi} onChange={(e) => setForm({...form, komisi: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" placeholder="20" />
-              </div>
+              {!editingMitra && (
+                <p className="text-[10px] text-slate-400 italic px-2">
+                  * Mitra dapat login menggunakan email & password di atas setelah akun dibuat.
+                </p>
+              )}
             </div>
             <DialogFooter className="mt-8">
               <Button onClick={handleSave} className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-black uppercase tracking-widest text-xs">Simpan Data Mitra</Button>
@@ -192,9 +277,16 @@ export default function AdminMitra() {
                 </Badge>
               </div>
               <h3 className="text-lg font-black text-slate-900 mb-1">{mitra.nama_toko}</h3>
-              <div className="flex items-center gap-1.5 text-slate-400 mb-4">
-                <MapPin className="h-3.5 w-3.5" />
-                <span className="text-xs font-bold">{mitra.kota}</span>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span className="text-xs font-bold">{mitra.kota}</span>
+                </div>
+                {mitra.user?.nama && (
+                  <div className="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+                    {mitra.user.nama}
+                  </div>
+                )}
               </div>
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">

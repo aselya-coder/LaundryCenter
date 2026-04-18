@@ -36,6 +36,7 @@ const adminItems = [
   { title: 'Semua Order', url: '/admin/orders', icon: Package },
   { title: 'Kelola Mitra', url: '/admin/mitra', icon: Building2 },
   { title: 'Laporan Keuangan', url: '/admin/reports', icon: FileText },
+  { title: 'Daftar Akun', url: '/admin/accounts', icon: Users },
 ];
 
 const mitraItems = [

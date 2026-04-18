@@ -1,71 +1,254 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { Order } from '@/lib/types';
-import { OrderHeader } from '@/components/order/OrderHeader';
-import { OrderItems } from '@/components/order/OrderItems';
-import { PaymentInfo } from '@/components/order/PaymentInfo';
-import { ShippingInfo } from '@/components/order/ShippingInfo';
-import NotFound from '@/pages/NotFound';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Order, ORDER_STATUS_LABELS } from '@/lib/types';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { StatusBadge } from '@/components/StatusBadge';
+import { ArrowLeft, User, Phone, MapPin, Calendar, Tag, Weight, ReceiptText, Clock, CheckCircle2, History } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 export default function OrderDetailPage() {
-  const { orderId } = useParams<{ orderId: string }>();
+  const { orderId: id } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchOrder = async () => {
-      if (!orderId) return;
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('id', orderId)
-          .single();
+  const fetchOrder = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, order_history(*)')
+        .eq('id', id)
+        .single();
 
-        if (error) throw error;
-        setOrder(data);
-      } catch (err) {
-        console.error('Error fetching order detail:', err);
-      } finally {
-        setLoading(false);
+      if (error) throw error;
+      
+      // Sort order_history by created_at descending
+      if (data.order_history) {
+        data.order_history.sort((a: any, b: any) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
       }
-    };
+      
+      setOrder(data);
+    } catch (err: any) {
+      console.error('Error fetching order detail:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchOrder();
-  }, [orderId]);
+  useEffect(() => {
+    if (id) fetchOrder();
+  }, [id]);
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+      <div className="h-96 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   if (!order) {
-    return <NotFound />;
+    return (
+      <div className="p-10 text-center">
+        <h2 className="text-2xl font-bold">Order tidak ditemukan</h2>
+        <Link to="/mitra/orders" className="text-blue-600 hover:underline mt-4 inline-block">Kembali ke Daftar Order</Link>
+      </div>
+    );
   }
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 px-4">
-      <Link
-        to="/mitra/orders"
-        className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 mb-4"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Kembali ke Daftar Order
-      </Link>
-      <OrderHeader order={order} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-        <div className="lg:col-span-2 space-y-8">
-          <OrderItems order={order} />
-          <ShippingInfo order={order} />
+    <div className="max-w-5xl mx-auto space-y-8 pb-20">
+      <div className="flex items-center gap-4">
+        <Link to="/mitra/orders">
+          <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl bg-white shadow-sm border border-slate-100 text-slate-500 hover:text-blue-600">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            Detail Order
+            <span className="text-blue-600 font-mono text-xl bg-blue-50 px-3 py-1 rounded-lg">#{order.kode_order}</span>
+          </h1>
+          <p className="text-slate-500 font-medium">Informasi lengkap pesanan pelanggan</p>
         </div>
-        <div className="space-y-8">
-          <PaymentInfo order={order} />
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Main Info */}
+          <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-[2rem]">
+            <div className="flex items-center justify-between mb-8">
+              <StatusBadge status={order.status} className="scale-110" />
+              <div className="text-right">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Terakhir Update</p>
+                <p className="text-sm font-bold text-slate-900">{new Date(order.updated_at).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-10">
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <User className="h-3 w-3" /> Customer
+                  </h3>
+                  <div>
+                    <p className="text-lg font-black text-slate-900">{order.customer_name}</p>
+                    <p className="text-sm font-bold text-slate-500 flex items-center gap-1.5 mt-1">
+                      <Phone className="h-3.5 w-3.5" /> {order.customer_hp || '-'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <ReceiptText className="h-3 w-3" /> Detail Layanan
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Jenis</p>
+                      <p className="text-sm font-black text-slate-900 capitalize">{order.jenis}</p>
+                    </div>
+                    {order.jenis === 'kiloan' && (
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Berat</p>
+                        <p className="text-sm font-black text-slate-900">{order.berat} kg</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <Calendar className="h-3 w-3" /> Jadwal
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-bold text-slate-400">Masuk</span>
+                      <span className="font-black text-slate-900">{new Date(order.tanggal_masuk).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-bold text-slate-400">Estimasi</span>
+                      <span className="font-black text-blue-600">
+                        {order.tanggal_selesai 
+                          ? new Date(order.tanggal_selesai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : '-'
+                        }
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <Tag className="h-3 w-3" /> Catatan
+                  </h3>
+                  <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 min-h-[80px]">
+                    <p className="text-sm font-medium text-slate-700 italic leading-relaxed">
+                      "{order.catatan || 'Tidak ada catatan tambahan'}"
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Status History */}
+          <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-[2rem]">
+            <h3 className="text-lg font-black text-slate-900 flex items-center gap-3 uppercase tracking-wider mb-8">
+              <History className="h-5 w-5 text-blue-600" />
+              Riwayat Perjalanan Cucian
+            </h3>
+            
+            <div className="space-y-8 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+              {order.order_history && order.order_history.length > 0 ? (
+                order.order_history.map((history, idx) => (
+                  <div key={history.id} className="relative pl-12">
+                    <div className={`absolute left-0 top-1 h-8 w-8 rounded-full border-4 border-white shadow-sm flex items-center justify-center z-10 ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                      {idx === 0 ? <CheckCircle2 className="h-4 w-4" /> : <div className="h-2 w-2 rounded-full bg-current" />}
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <p className={`text-sm font-black uppercase tracking-widest ${idx === 0 ? 'text-blue-600' : 'text-slate-900'}`}>
+                          {ORDER_STATUS_LABELS[history.status]}
+                        </p>
+                        <p className="text-xs font-bold text-slate-400 mt-0.5">{history.catatan}</p>
+                      </div>
+                      <div className="text-left sm:text-right shrink-0">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {new Date(history.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                        </p>
+                        <p className="text-sm font-black text-slate-900">
+                          {new Date(history.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="pl-12 text-slate-400 font-bold text-sm italic">
+                  Belum ada riwayat status tercatat
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Payment Summary */}
+        <div className="space-y-6">
+          <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-blue-600 text-white rounded-[2rem] relative overflow-hidden">
+            <div className="relative z-10 space-y-6">
+              <h3 className="text-lg font-black flex items-center gap-2 uppercase tracking-wider">
+                <ReceiptText className="h-5 w-5 text-blue-200" />
+                Rincian Biaya
+              </h3>
+              
+              <div className="space-y-4">
+                <div className="flex justify-between items-center text-blue-100">
+                  <span className="text-xs font-bold uppercase tracking-widest">Harga Dasar</span>
+                  <span className="font-black">{order.jenis === 'kiloan' ? 'Rp 7.000 / kg' : 'Custom'}</span>
+                </div>
+                {order.jenis === 'kiloan' && (
+                  <div className="flex justify-between items-center text-blue-100">
+                    <span className="text-xs font-bold uppercase tracking-widest">Berat Total</span>
+                    <span className="font-black">{order.berat} kg</span>
+                  </div>
+                )}
+                <Separator className="bg-white/20" />
+                <div className="space-y-1">
+                  <span className="text-xs font-bold uppercase tracking-widest text-blue-200">Total Dibayar</span>
+                  <p className="text-4xl font-black">Rp {order.total_price.toLocaleString('id-ID')}</p>
+                </div>
+              </div>
+            </div>
+            <div className="absolute -right-8 -bottom-8 opacity-10">
+              <ReceiptText className="h-40 w-40 text-white" />
+            </div>
+          </Card>
+
+          <Card className="p-6 border-none shadow-xl shadow-slate-200/50 bg-white rounded-[2rem]">
+            <div className="flex items-start gap-4">
+              <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 shrink-0">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-1">Lokasi Outlet</p>
+                <p className="font-bold text-slate-900 text-sm">{order.mitra?.nama_toko || 'Pusat Laundry'}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Button 
+            className="w-full h-14 rounded-2xl font-black bg-slate-900 hover:bg-slate-800 text-white shadow-lg transition-all active:scale-95"
+            onClick={() => window.print()}
+          >
+            CETAK NOTA
+          </Button>
         </div>
       </div>
     </div>

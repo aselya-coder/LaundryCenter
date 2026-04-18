@@ -6,12 +6,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 import TrackingPage from "./pages/TrackingPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminMitra from "./pages/admin/AdminMitra";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminAccounts from "./pages/admin/AdminAccounts";
 import MitraDashboard from "./pages/mitra/MitraDashboard";
 import MitraNewOrder from "./pages/mitra/MitraNewOrder";
 import MitraOrders from "@/pages/mitra/MitraOrders";
@@ -50,11 +52,13 @@ const App = () => (
             <Route path="/" element={<TrackingPage />} />
             <Route path="/tracking" element={<TrackingPage />} />
             <Route path="/login" element={<AuthRedirect />} />
+            <Route path="/register" element={<RegisterPage />} />
 
             <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
             <Route path="/admin/orders" element={<ProtectedRoute role="admin"><AdminOrders /></ProtectedRoute>} />
             <Route path="/admin/mitra" element={<ProtectedRoute role="admin"><AdminMitra /></ProtectedRoute>} />
             <Route path="/admin/reports" element={<ProtectedRoute role="admin"><AdminReports /></ProtectedRoute>} />
+            <Route path="/admin/accounts" element={<ProtectedRoute role="admin"><AdminAccounts /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute role="admin"><AdminSettings /></ProtectedRoute>} />
 
             <Route path="/mitra" element={<ProtectedRoute role="mitra"><MitraDashboard /></ProtectedRoute>} />

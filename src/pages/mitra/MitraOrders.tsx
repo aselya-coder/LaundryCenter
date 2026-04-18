@@ -61,6 +61,15 @@ export default function MitraOrders() {
 
       if (error) throw error;
 
+      // Simpan riwayat status
+      await supabase
+        .from('order_history')
+        .insert([{
+          order_id: order.id,
+          status: nextStatus,
+          catatan: `Status diperbarui ke ${ORDER_STATUS_LABELS[nextStatus]}`
+        }]);
+
       toast.success(`Status order diperbarui ke "${ORDER_STATUS_LABELS[nextStatus]}"`);
       fetchOrders();
     } catch (err: any) {

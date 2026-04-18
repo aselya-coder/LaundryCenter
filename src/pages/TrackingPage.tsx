@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, Order } from '@/lib/types';
-import { QrCode, Search, WashingMachine, CheckCircle2, Clock, Loader2 } from 'lucide-react';
+import { QrCode, Search, WashingMachine, CheckCircle2, Clock, Loader2, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -20,22 +20,31 @@ export default function TrackingPage() {
     e.preventDefault();
     if (!idOrder.trim()) return;
 
+    // Bersihkan input: hapus karakter '#' jika ada dan ubah ke uppercase
+    const cleanCode = idOrder.trim().replace(/^#/, '').toUpperCase();
+
     try {
       setLoading(true);
       setSearched(true);
       const { data, error } = await supabase
         .from('orders')
-        .select('*, mitra(nama_toko)')
-        .eq('id', idOrder.trim())
-        .single();
+        .select('*, mitra(nama_toko), order_history(*)')
+        .eq('kode_order', cleanCode)
+        .maybeSingle();
 
       if (error) {
+        console.error('Error tracking order:', error);
+        toast.error('Gagal melacak order');
         setOrder(null);
-        if (error.code !== 'PGRST116') { // PGRST116 is code for no rows returned
-          console.error('Error tracking order:', error);
-          toast.error('Gagal melacak order');
-        }
+      } else if (!data) {
+        setOrder(null);
       } else {
+        // Sort history descending
+        if (data.order_history) {
+          data.order_history.sort((a: any, b: any) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        }
         setOrder(data);
       }
     } catch (err) {
@@ -74,7 +83,7 @@ export default function TrackingPage() {
             <Input
               value={idOrder}
               onChange={(e) => { setIdOrder(e.target.value); setSearched(false); }}
-              placeholder="Masukkan ID Order..."
+              placeholder="Masukkan Kode Tracking (contoh: LD-2026...)"
               className="pl-10 h-12 text-lg font-mono border-slate-200 focus:border-blue-500 focus:ring-blue-500 rounded-xl bg-white shadow-sm"
             />
           </div>
@@ -100,7 +109,7 @@ export default function TrackingPage() {
                   <Search className="h-8 w-8 text-slate-400" />
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 mb-2">Order Tidak Ditemukan</h3>
-                <p className="text-slate-500 max-w-xs mx-auto">ID order <strong>{idOrder}</strong> tidak terdaftar di sistem kami. Mohon cek kembali struk Anda.</p>
+                <p className="text-slate-500 max-w-xs mx-auto">Kode <strong>{idOrder}</strong> tidak terdaftar. Mohon periksa kembali kode tracking pada struk Anda.</p>
               </Card>
             </motion.div>
           )}
@@ -122,8 +131,8 @@ export default function TrackingPage() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded">Order ID</span>
-                        <p className="font-mono text-xl font-black text-slate-900">#{order.id.slice(0, 8)}</p>
+                        <span className="text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded">Kode Tracking</span>
+                        <p className="font-mono text-xl font-black text-slate-900">#{order.kode_order}</p>
                       </div>
                       <p className="text-slate-600 font-medium">{order.customer_name} <span className="text-slate-300 mx-2">|</span> {order.mitra?.nama_toko || 'Pusat'}</p>
                     </div>
@@ -156,53 +165,52 @@ export default function TrackingPage() {
             </div>
 
             <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
-              <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-blue-600"></div>
-                Timeline Progress
+              <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-2 uppercase tracking-wider">
+                <History className="h-5 w-5 text-blue-600" />
+                Riwayat Perjalanan Cucian
               </h3>
-              <div className="relative pl-4">
-                <div className="absolute left-[21px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                <div className="space-y-2">
-                  {ORDER_STATUS_FLOW.map((status, i) => {
-                    const isCompleted = i <= currentIdx;
-                    const isCurrent = i === currentIdx;
-
-                    return (
-                      <div key={status} className="relative flex gap-6 pb-8 last:pb-0">
+              
+              <div className="relative pl-4 before:absolute before:left-[21px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                <div className="space-y-8">
+                  {order.order_history && order.order_history.length > 0 ? (
+                    order.order_history.map((history, idx) => (
+                      <div key={history.id} className="relative flex gap-6">
                         <div className="relative z-10 flex items-center justify-center h-4 w-4 mt-1">
-                          {isCompleted ? (
-                            <div className={`h-4 w-4 rounded-full flex items-center justify-center ring-4 ${isCurrent ? 'bg-blue-600 ring-blue-100 animate-pulse' : 'bg-green-500 ring-green-50'}`}>
-                              <CheckCircle2 className="h-3 w-3 text-white" />
-                            </div>
-                          ) : (
-                            <div className="h-3 w-3 rounded-full bg-white border-2 border-slate-200 ring-4 ring-slate-50"></div>
-                          )}
-                        </div>
-                        <div className={`flex-1 ${isCompleted ? '' : 'opacity-40'}`}>
-                          <div className="flex items-center justify-between gap-4">
-                            <p className={`text-base font-bold ${isCurrent ? 'text-blue-600' : 'text-slate-900'}`}>
-                              {ORDER_STATUS_LABELS[status]}
-                            </p>
-                            {isCurrent && (
-                              <p className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded">
-                                {new Date(order.updated_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            )}
+                          <div className={`h-4 w-4 rounded-full flex items-center justify-center ring-4 ${idx === 0 ? 'bg-blue-600 ring-blue-100 animate-pulse' : 'bg-green-500 ring-green-50'}`}>
+                            {idx === 0 ? <CheckCircle2 className="h-3 w-3 text-white" /> : <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                           </div>
-                          {isCurrent && (
-                            <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                              {new Date(order.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between gap-4">
+                            <p className={`text-base font-black uppercase tracking-widest ${idx === 0 ? 'text-blue-600' : 'text-slate-900'}`}>
+                              {ORDER_STATUS_LABELS[history.status]}
+                            </p>
+                            <p className="text-xs font-bold text-slate-400">
+                              {new Date(history.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1 font-bold">
+                            {new Date(history.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          </p>
+                          {history.catatan && (
+                            <p className="text-[10px] text-slate-400 mt-1 italic font-medium">
+                              "{history.catatan}"
                             </p>
                           )}
                         </div>
                       </div>
-                    );
-                  })}
+                    ))
+                  ) : (
+                    <div className="text-slate-400 font-bold text-sm italic py-4">
+                      Belum ada riwayat status tercatat
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
           </motion.div>
         )}
+        </AnimatePresence>
       </div>
     </div>
   );

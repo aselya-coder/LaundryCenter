@@ -47,11 +47,15 @@ export interface User {
 
 export interface Mitra {
   id: string;
+  user_id?: string;
   nama_toko: string;
   alamat: string;
   kota: string;
   komisi: number;
   aktif: boolean;
+  user?: {
+    nama: string;
+  };
 }
 
 export interface Order {
@@ -71,4 +75,13 @@ export interface Order {
   mitra?: {
     nama_toko: string;
   };
+  order_history?: OrderHistory[];
+}
+
+export interface OrderHistory {
+  id: string;
+  order_id: string;
+  status: OrderStatus;
+  catatan: string | null;
+  created_at: string;
 }

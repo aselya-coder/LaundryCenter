@@ -13,53 +13,27 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('laundry_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [mitra, setMitra] = useState<Mitra | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [mitra, setMitra] = useState<Mitra | null>(() => {
-    const saved = localStorage.getItem('laundry_mitra');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('laundry_user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('laundry_user');
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (mitra) {
-      localStorage.setItem('laundry_mitra', JSON.stringify(mitra));
-    } else {
-      localStorage.removeItem('laundry_mitra');
-    }
-  }, [mitra]);
-
-  const login = useCallback(async (email: string, _password: string) => {
+  const fetchUserData = useCallback(async (userId: string, email: string) => {
     try {
-      // Sederhanakan login untuk demo ini dengan mencari di tabel 'users' (jika ada)
-      // Jika tidak ada tabel users, kita bisa asumsikan login berhasil untuk email tertentu
-      // Namun agar sesuai perintah "full integrasi", kita cari di DB.
-      
       const { data: userData, error: userError } = await supabase
-        .from('users' as any)
+        .from('profiles')
         .select('*')
-        .eq('email', email)
-        .single();
+        .eq('id', userId)
+        .maybeSingle();
 
       if (userError || !userData) {
-        // Fallback untuk demo jika tabel belum ada: asumsikan admin
+        // Fallback jika profil di tabel users belum dibuat (misal: admin pertama)
         if (email === 'admin@laundry.com') {
-          const adminUser: User = { id: 'admin-id', nama: 'Admin Pusat', email: 'admin@laundry.com', role: 'admin' };
+          const adminUser: User = { id: userId, nama: 'Admin Pusat', email: 'admin@laundry.com', role: 'admin' };
           setUser(adminUser);
           setMitra(null);
-          return true;
+          return;
         }
-        return false;
+        return;
       }
 
       setUser(userData);
@@ -69,23 +43,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('mitra')
           .select('*')
           .eq('user_id', userData.id)
-          .single();
+          .maybeSingle();
         setMitra(mitraData);
       } else {
         setMitra(null);
       }
+    } catch (err) {
+      console.error('Error fetching user data:', err);
+    }
+  }, []);
 
+  useEffect(() => {
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchUserData(session.user.id, session.user.email!);
+      }
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        fetchUserData(session.user.id, session.user.email!);
+      } else {
+        setUser(null);
+        setMitra(null);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [fetchUserData]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+      if (data.user) {
+        await fetchUserData(data.user.id, data.user.email!);
+      }
       return true;
     } catch (err) {
       console.error('Login error:', err);
       return false;
     }
-  }, []);
+  }, [fetchUserData]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setMitra(null);
   }, []);
+
+  if (loading) {
+    return null; // Or a loading spinner
+  }
 
   return (
     <AuthContext.Provider value={{ user, mitra, login, logout, isAuthenticated: !!user }}>
