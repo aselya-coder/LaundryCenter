@@ -174,10 +174,6 @@ export default function AdminDashboard() {
                 <div className="h-2 w-2 rounded-full bg-blue-600"></div>
                 Omzet Total
               </div>
-              <div className="flex items-center gap-1.5 text-green-500">
-                <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                Omzet Lunas
-              </div>
               <div className="flex items-center gap-1.5 text-red-500">
                 <div className="h-2 w-2 rounded-full bg-red-500"></div>
                 Pengeluaran
@@ -192,10 +188,7 @@ export default function AdminDashboard() {
                     <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
                   </linearGradient>
-                  <linearGradient id="colorPaidRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
+
                   <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
@@ -208,12 +201,12 @@ export default function AdminDashboard() {
                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
                   formatter={(value: any, name: string) => [
                     `Rp ${value.toLocaleString('id-ID')}`, 
-                    name === 'revenue' ? 'Omzet Total' : name === 'paidRevenue' ? 'Omzet Lunas' : 'Pengeluaran'
+                    name === 'revenue' ? 'Omzet Total' : 'Pengeluaran'
                   ]}
                 />
                 <Area type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={4} fillOpacity={1} fill="url(#colorExpense)" />
                 <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
-                <Area type="monotone" dataKey="paidRevenue" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorPaidRevenue)" />
+
               </AreaChart>
             </ResponsiveContainer>
           </div>
