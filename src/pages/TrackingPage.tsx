@@ -208,11 +208,16 @@ export default function TrackingPage() {
                     </div>
                     <StatusBadge status={order.status} className="h-10 px-6 text-sm font-bold rounded-full shadow-sm" />
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
                     <div className="space-y-1">
                       <p className="text-slate-400 text-xs font-semibold uppercase">Total Bayar</p>
                       <p className="font-bold text-blue-600">Rp {order.total_price.toLocaleString('id-ID')}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-slate-400 text-xs font-semibold uppercase">Status Pembayaran</p>
+                      <p className={`font-bold ${(order.is_paid || order.status === 'selesai_closed') ? 'text-green-600' : 'text-red-500'}`}>
+                        {(order.is_paid || order.status === 'selesai_closed') ? 'LUNAS' : 'BELUM BAYAR'}
+                      </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-slate-400 text-xs font-semibold uppercase">Terakhir Update</p>

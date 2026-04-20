@@ -289,8 +289,8 @@ export default function OrderDetailPage() {
                 
                 <div className="flex justify-between items-center py-3 border-t border-white/10">
                   <span className="text-xs font-bold uppercase tracking-widest text-blue-200">Status</span>
-                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${order.is_paid ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
-                    {order.is_paid ? 'LUNAS' : 'BELUM BAYAR'}
+                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${(order.is_paid || order.status === 'selesai_closed') ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                    {(order.is_paid || order.status === 'selesai_closed') ? 'LUNAS' : 'BELUM BAYAR'}
                   </span>
                 </div>
 

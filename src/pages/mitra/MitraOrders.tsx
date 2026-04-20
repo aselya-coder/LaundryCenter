@@ -116,6 +116,11 @@ export default function MitraOrders() {
 
   const handleTogglePayment = async (order: Order) => {
     try {
+      if (order.status === 'selesai_closed' && order.is_paid) {
+        toast.error('Order yang sudah selesai tidak dapat diubah menjadi BELUM BAYAR');
+        return;
+      }
+
       const newPaidStatus = !order.is_paid;
       const { error } = await supabase
         .from('orders')
@@ -203,8 +208,8 @@ export default function MitraOrders() {
           o.berat,
           o.total_price,
           ORDER_STATUS_LABELS[o.status] || o.status,
-          o.is_paid ? 'LUNAS' : 'BELUM BAYAR',
-          o.payment_method || '-'
+          (o.is_paid || o.status === 'selesai_closed') ? 'LUNAS' : 'BELUM BAYAR',
+          o.payment_method || (o.status === 'selesai_closed' ? 'tunai' : '-')
         ]);
 
         // Status Styling
@@ -213,7 +218,7 @@ export default function MitraOrders() {
 
         // Payment Styling
         const payCell = row.getCell(8);
-        payCell.font = { bold: true, color: { argb: o.is_paid ? 'FF10B981' : 'FFEF4444' } };
+        payCell.font = { bold: true, color: { argb: (o.is_paid || o.status === 'selesai_closed') ? 'FF10B981' : 'FFEF4444' } };
 
         // Zebra striping
         if (index % 2 === 0) {
@@ -422,18 +427,20 @@ export default function MitraOrders() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Biaya</p>
-                      <div className="flex items-center gap-2 group/pay">
+                      <div className="flex items-center gap-1.5 group/pay">
                         <DollarSign className="h-3.5 w-3.5 text-green-600" />
                         <p className="text-sm font-bold text-slate-900">Rp {order.total_price.toLocaleString('id-ID')}</p>
-                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ml-1 ${order.is_paid ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                          {order.is_paid ? 'LUNAS' : 'BELUM'}
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-widest ${(order.is_paid || order.status === 'selesai_closed') ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                          {(order.is_paid || order.status === 'selesai_closed') ? `LUNAS ${order.payment_method ? `(${order.payment_method})` : ''}` : 'BELUM BAYAR'}
                         </span>
-                        <button 
-                          onClick={() => handleTogglePayment(order)}
-                          className="text-[8px] font-bold text-slate-400 hover:text-blue-600 opacity-0 group-hover/pay:opacity-100 transition-opacity ml-1"
-                        >
-                          Ubah
-                        </button>
+                        {order.status !== 'selesai_closed' && (
+                          <button
+                            onClick={() => handleTogglePayment(order)}
+                            className="text-[8px] font-bold text-slate-400 hover:text-blue-600 opacity-0 group-hover/pay:opacity-100 transition-opacity ml-1"
+                          >
+                            Ubah
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="space-y-1">

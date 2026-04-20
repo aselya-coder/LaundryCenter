@@ -18,11 +18,13 @@ export function PaymentInfo({ order }: PaymentInfoProps) {
       <CardContent className="space-y-4">
         <div className="flex justify-between">
           <p className="text-sm font-semibold text-slate-600">Metode</p>
-          <p className="font-bold">QRIS</p>
+          <p className="font-bold uppercase">{order.payment_method || (order.status === 'selesai_closed' ? 'tunai' : '-')}</p>
         </div>
         <div className="flex justify-between">
           <p className="text-sm font-semibold text-slate-600">Status</p>
-          <p className="font-bold text-green-600">Lunas</p>
+          <p className={`font-bold ${(order.is_paid || order.status === 'selesai_closed') ? 'text-green-600' : 'text-red-500'}`}>
+            {(order.is_paid || order.status === 'selesai_closed') ? 'LUNAS' : 'BELUM BAYAR'}
+          </p>
         </div>
         <div className="text-center p-4 bg-slate-50 rounded-lg mt-4">
             <p className="text-sm font-semibold text-slate-600 mb-2">Bukti Pembayaran</p>

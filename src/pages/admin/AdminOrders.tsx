@@ -153,6 +153,11 @@ export default function AdminOrders() {
 
   const handleTogglePayment = async (order: Order) => {
     try {
+      if (order.status === 'selesai_closed' && order.is_paid) {
+        toast.error('Order yang sudah selesai tidak dapat diubah menjadi BELUM BAYAR');
+        return;
+      }
+
       const newPaidStatus = !order.is_paid;
       const { error } = await supabase
         .from('orders')
@@ -303,18 +308,20 @@ export default function AdminOrders() {
                       <div className="p-6 bg-slate-50 rounded-2xl flex flex-col justify-center border border-slate-100 relative group/pay">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Pembayaran</p>
                         <p className="text-2xl font-black text-blue-600 mb-2">Rp {order.total_price.toLocaleString('id-ID')}</p>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-widest ${order.is_paid ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                            {order.is_paid ? `LUNAS (${order.payment_method})` : 'BELUM BAYAR'}
+                        <div className="flex items-center gap-1.5 group/pay">
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-widest ${(order.is_paid || order.status === 'selesai_closed') ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                            {(order.is_paid || order.status === 'selesai_closed') ? `LUNAS ${order.payment_method ? `(${order.payment_method})` : ''}` : 'BELUM BAYAR'}
                           </span>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleTogglePayment(order)}
-                            className="h-6 px-2 text-[10px] font-bold text-slate-400 hover:text-blue-600 opacity-0 group-hover/pay:opacity-100 transition-opacity"
-                          >
-                            Ubah
-                          </Button>
+                          {order.status !== 'selesai_closed' && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleTogglePayment(order)}
+                              className="h-6 px-2 text-[10px] font-bold text-slate-400 hover:text-blue-600 opacity-0 group-hover/pay:opacity-100 transition-opacity"
+                            >
+                              Ubah
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -387,6 +394,9 @@ export default function AdminOrders() {
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Bayar</p>
                     <p className="text-sm font-black text-blue-600 font-mono">Rp {selectedOrder.total_price.toLocaleString('id-ID')}</p>
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${(selectedOrder.is_paid || selectedOrder.status === 'selesai_closed') ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                      {(selectedOrder.is_paid || selectedOrder.status === 'selesai_closed') ? 'LUNAS' : 'BELUM BAYAR'}
+                    </span>
                   </div>
                 </div>
               </div>

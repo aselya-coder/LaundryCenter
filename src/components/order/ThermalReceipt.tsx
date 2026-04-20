@@ -74,13 +74,13 @@ export const ThermalReceipt = React.forwardRef<HTMLDivElement, ThermalReceiptPro
               <span>Rp {order.total_price.toLocaleString('id-ID')}</span>
             </div>
             <div className="flex justify-between">
-              <span>Status:</span>
-              <span className="font-bold uppercase">{order.is_paid ? 'LUNAS' : 'BELUM BAYAR'}</span>
+              <span>Status Bayar:</span>
+              <span className="font-bold">{(order.is_paid || order.status === 'selesai_closed') ? 'LUNAS' : 'BELUM BAYAR'}</span>
             </div>
-            {order.is_paid && (
+            {(order.is_paid || order.status === 'selesai_closed') && (
               <div className="flex justify-between">
                 <span>Metode:</span>
-                <span className="font-bold uppercase">{order.payment_method}</span>
+                <span className="font-bold uppercase">{order.payment_method || 'tunai'}</span>
               </div>
             )}
           </div>

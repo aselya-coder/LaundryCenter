@@ -135,8 +135,8 @@ export default function MitraDashboard() {
           o.berat,
           o.total_price,
           ORDER_STATUS_LABELS[o.status] || o.status,
-          o.is_paid ? 'LUNAS' : 'BELUM BAYAR',
-          o.payment_method || '-'
+          (o.is_paid || o.status === 'selesai_closed') ? 'LUNAS' : 'BELUM BAYAR',
+          o.payment_method || (o.status === 'selesai_closed' ? 'tunai' : '-')
         ]);
 
         // Status Styling
@@ -145,7 +145,7 @@ export default function MitraDashboard() {
 
         // Payment Styling
         const payCell = row.getCell(8);
-        payCell.font = { bold: true, color: { argb: o.is_paid ? 'FF10B981' : 'FFEF4444' } };
+        payCell.font = { bold: true, color: { argb: (o.is_paid || o.status === 'selesai_closed') ? 'FF10B981' : 'FFEF4444' } };
 
         // Zebra striping
         if (index % 2 === 0) {
@@ -269,7 +269,12 @@ export default function MitraDashboard() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-4 mt-4 sm:mt-0">
-                    <p className="font-black text-slate-900 text-sm">Rp {order.total_price.toLocaleString('id-ID')}</p>
+                    <div className="text-right">
+                      <p className="font-black text-slate-900 text-sm">Rp {order.total_price.toLocaleString('id-ID')}</p>
+                      <p className={`text-[9px] font-black uppercase tracking-widest ${(order.is_paid || order.status === 'selesai_closed') ? 'text-green-600' : 'text-red-500'}`}>
+                        {(order.is_paid || order.status === 'selesai_closed') ? 'LUNAS' : 'BELUM BAYAR'}
+                      </p>
+                    </div>
                     <StatusBadge status={order.status} className="shadow-sm" />
                   </div>
                 </div>

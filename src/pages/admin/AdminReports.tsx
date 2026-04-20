@@ -106,6 +106,11 @@ export default function AdminReports() {
     });
   }, [orders, dateRange]);
 
+  // Logika Keuangan - Memastikan order selesai dianggap lunas untuk laporan
+  const totalOmzetBruto = useMemo(() => filteredByDate.reduce((sum, o) => sum + o.total_price, 0), [filteredByDate]);
+  const settledOrders = useMemo(() => filteredByDate.filter(o => o.status === 'selesai_closed' || o.is_paid), [filteredByDate]);
+  const pendingOrders = useMemo(() => filteredByDate.filter(o => o.status !== 'selesai_closed' && !o.is_paid), [filteredByDate]);
+
   // Filter pengeluaran berdasarkan rentang tanggal
   const filteredExpenses = useMemo(() => {
     if (!dateRange.from || !dateRange.to) return expenses;
@@ -120,11 +125,6 @@ export default function AdminReports() {
   }, [expenses, dateRange]);
 
   const totalExpenses = useMemo(() => filteredExpenses.reduce((sum, e) => sum + e.jumlah, 0), [filteredExpenses]);
-
-  // Logika Keuangan
-  const totalOmzetBruto = useMemo(() => filteredByDate.reduce((sum, o) => sum + o.total_price, 0), [filteredByDate]);
-  const settledOrders = useMemo(() => filteredByDate.filter(o => o.status === 'selesai_closed' || o.is_paid), [filteredByDate]);
-  const pendingOrders = useMemo(() => filteredByDate.filter(o => o.status !== 'selesai_closed' && !o.is_paid), [filteredByDate]);
   
   const totalOmzetSettled = useMemo(() => settledOrders.reduce((sum, o) => sum + o.total_price, 0), [settledOrders]);
   const totalOmzetPending = useMemo(() => pendingOrders.reduce((sum, o) => sum + o.total_price, 0), [pendingOrders]);

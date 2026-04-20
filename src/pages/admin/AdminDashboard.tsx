@@ -48,7 +48,7 @@ export default function AdminDashboard() {
   }), [orders]);
   
   const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + o.total_price, 0), [orders]);
-  const totalPaidRevenue = useMemo(() => orders.filter(o => o.is_paid).reduce((sum, o) => sum + o.total_price, 0), [orders]);
+  const totalPaidRevenue = useMemo(() => orders.filter(o => o.is_paid || o.status === 'selesai_closed').reduce((sum, o) => sum + o.total_price, 0), [orders]);
   const totalExpenses = useMemo(() => expenses.reduce((sum, e) => sum + e.jumlah, 0), [expenses]);
   const netProfit = totalPaidRevenue - totalExpenses;
 
@@ -78,7 +78,7 @@ export default function AdminDashboard() {
         .reduce((sum, o) => sum + o.total_price, 0);
       
       const paidAmount = orders
-        .filter(o => o.tanggal_masuk && o.tanggal_masuk.split('T')[0] === date && o.is_paid)
+        .filter(o => o.tanggal_masuk && o.tanggal_masuk.split('T')[0] === date && (o.is_paid || o.status === 'selesai_closed'))
         .reduce((sum, o) => sum + o.total_price, 0);
       
       const expenseAmount = expenses
