@@ -211,9 +211,9 @@ export default function AdminDashboard() {
                     name === 'revenue' ? 'Omzet Total' : name === 'paidRevenue' ? 'Omzet Lunas' : 'Pengeluaran'
                   ]}
                 />
+                <Area type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={4} fillOpacity={1} fill="url(#colorExpense)" />
                 <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
                 <Area type="monotone" dataKey="paidRevenue" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorPaidRevenue)" />
-                <Area type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={4} fillOpacity={1} fill="url(#colorExpense)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
