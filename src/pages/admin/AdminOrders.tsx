@@ -104,12 +104,22 @@ export default function AdminOrders() {
     }
 
     try {
+      const updateData: any = { 
+        status: nextStatus, 
+        updated_at: new Date().toISOString() 
+      };
+
+      // Jika status berubah menjadi selesai_closed, otomatis lunas
+      if (nextStatus === 'selesai_closed') {
+        updateData.is_paid = true;
+        if (!order.payment_method) {
+          updateData.payment_method = 'tunai';
+        }
+      }
+
       const { error } = await supabase
         .from('orders')
-        .update({ 
-          status: nextStatus, 
-          updated_at: new Date().toISOString() 
-        })
+        .update(updateData)
         .eq('id', order.id);
 
       if (error) throw error;
@@ -120,13 +130,20 @@ export default function AdminOrders() {
         .insert([{
           order_id: order.id,
           status: nextStatus,
-          catatan: `Status diperbarui oleh Admin ke ${ORDER_STATUS_LABELS[nextStatus]}`
+          catatan: nextStatus === 'selesai_closed' 
+            ? `Order selesai & pembayaran otomatis ditandai LUNAS` 
+            : `Status diperbarui oleh Admin ke ${ORDER_STATUS_LABELS[nextStatus]}`
         }]);
 
-      toast.success(`Status order diperbarui ke "${ORDER_STATUS_LABELS[nextStatus]}"`);
-      fetchOrders();
+      if (nextStatus === 'selesai_closed') {
+        toast.success(`Order selesai! Pembayaran otomatis ditandai LUNAS.`);
+      } else {
+        toast.success(`Status order diperbarui ke "${ORDER_STATUS_LABELS[nextStatus]}"`);
+      }
+      
+      await fetchOrders();
       if (selectedOrder && selectedOrder.id === order.id) {
-        fetchOrderDetail(order.id);
+        await fetchOrderDetail(order.id);
       }
     } catch (err: any) {
       console.error('Error updating status:', err);
@@ -339,6 +356,10 @@ export default function AdminOrders() {
 
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] border-none shadow-2xl p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Detail Order #{selectedOrder?.kode_order}</DialogTitle>
+            <DialogDescription>Informasi lengkap dan riwayat perjalanan order laundry</DialogDescription>
+          </DialogHeader>
           {selectedOrder && (
             <div className="space-y-0">
               {/* Header */}

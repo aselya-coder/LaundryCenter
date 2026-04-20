@@ -5,13 +5,23 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { User } from '@/lib/types';
-import { Search, User as UserIcon, Mail, Shield, ShieldCheck, Loader2, PlusCircle, MoreVertical } from 'lucide-react';
+import { Search, User as UserIcon, Mail, Shield, ShieldCheck, Loader2, PlusCircle, Edit2, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
 export default function AdminAccounts() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [open, setOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [form, setForm] = useState({
+    id: '',
+    nama: '',
+    email: '',
+    role: 'mitra' as 'admin' | 'mitra'
+  });
 
   const fetchUsers = async () => {
     try {
@@ -34,6 +44,73 @@ export default function AdminAccounts() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const handleSave = async () => {
+    try {
+      if (editingUser) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            id: form.id || editingUser.id, // Izinkan update ID jika perlu sinkronisasi manual
+            nama: form.nama,
+            role: form.role
+          })
+          .eq('id', editingUser.id);
+        
+        if (error) throw error;
+        toast.success('Akun berhasil diperbarui');
+      } else {
+        const insertData: any = {
+          nama: form.nama,
+          email: form.email,
+          role: form.role
+        };
+        
+        if (form.id) insertData.id = form.id; // Gunakan ID dari Auth jika disediakan
+
+        const { error } = await supabase
+          .from('profiles')
+          .insert([insertData]);
+        
+        if (error) throw error;
+        toast.success('Profil akun baru berhasil dibuat');
+      }
+      fetchUsers();
+      setOpen(false);
+      setEditingUser(null);
+      setForm({ id: '', nama: '', email: '', role: 'mitra' }); // Kosongkan form setelah simpan berhasil
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal menyimpan data');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus akun ini? Data terkait mungkin juga akan terhapus.')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      toast.success('Akun berhasil dihapus');
+      fetchUsers();
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal menghapus akun');
+    }
+  };
+
+  const handleEdit = (user: User) => {
+    setEditingUser(user);
+    setForm({
+      id: user.id,
+      nama: user.nama,
+      email: user.email,
+      role: user.role
+    });
+    setOpen(true);
+  };
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => 
@@ -58,10 +135,55 @@ export default function AdminAccounts() {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Daftar Akun Sistem</h1>
           <p className="text-slate-500 font-medium">Kelola akses Administrator dan Mitra LaundryCenter</p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-12 px-6 shadow-lg shadow-blue-100 font-bold gap-2 transition-all active:scale-95">
-          <PlusCircle className="h-5 w-5" />
-          Tambah User Baru
-        </Button>
+        <Dialog open={open} onOpenChange={(val) => { if(!val) { setEditingUser(null); setForm({id: '', nama:'', email:'', role:'mitra'}); } setOpen(val); }}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-12 px-6 shadow-lg shadow-blue-100 font-bold gap-2 transition-all active:scale-95">
+              <PlusCircle className="h-5 w-5" />
+              Tambah User Baru
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md rounded-3xl border-none shadow-2xl p-8">
+            <DialogHeader className="mb-6">
+              <DialogTitle className="text-2xl font-black text-slate-900">
+                {editingUser ? 'Edit Profil Akun' : 'Tambah Profil Akun'}
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 font-medium text-sm">
+                {editingUser ? 'Perbarui informasi profil pengguna' : 'Buat profil baru untuk email yang sudah terdaftar di Supabase Auth'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">User ID (UUID dari Supabase Auth)</Label>
+                <Input value={form.id} onChange={(e) => setForm({...form, id: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm" placeholder="Contoh: 1a2b3c4d-..." />
+                <p className="text-[10px] text-slate-400 font-medium px-1">Opsional: Isi jika ingin sinkronisasi manual dengan Auth</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nama Lengkap</Label>
+                <Input value={form.nama} onChange={(e) => setForm({...form, nama: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm" placeholder="Nama User" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Email</Label>
+                <Input disabled={!!editingUser} value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm disabled:opacity-50" placeholder="email@example.com" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Role / Hak Akses</Label>
+                <select 
+                  value={form.role} 
+                  onChange={(e) => setForm({...form, role: e.target.value as any})}
+                  className="w-full h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm px-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="mitra">Mitra</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+            </div>
+            <DialogFooter className="mt-8">
+              <Button onClick={handleSave} className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-black uppercase tracking-widest text-xs">
+                {editingUser ? 'Perbarui Akun' : 'Simpan Profil Akun'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="relative">
@@ -109,11 +231,12 @@ export default function AdminAccounts() {
             </div>
             
             <div className="p-4 bg-slate-50/50 flex gap-2">
-              <Button variant="ghost" className="flex-1 h-10 rounded-xl font-bold text-slate-600 hover:bg-white hover:text-blue-600 gap-2">
+              <Button onClick={() => handleEdit(user)} variant="ghost" className="flex-1 h-10 rounded-xl font-bold text-slate-600 hover:bg-white hover:text-blue-600 gap-2">
+                <Edit2 className="h-4 w-4" />
                 Edit Profil
               </Button>
-              <Button variant="ghost" className="h-10 w-10 p-0 rounded-xl font-bold text-slate-400 hover:bg-white hover:text-slate-600">
-                <MoreVertical className="h-4 w-4" />
+              <Button onClick={() => handleDelete(user.id)} variant="ghost" className="h-10 w-10 p-0 rounded-xl font-bold text-red-400 hover:bg-red-50 hover:text-red-600">
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           </Card>

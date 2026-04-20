@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Package, DollarSign, Clock, Plus, ArrowRight, Wallet, History, Search, Activity, FileText, HelpCircle, Loader2 } from 'lucide-react';
+import { Package, DollarSign, Clock, Plus, ArrowRight, Wallet, History, Search, Activity, FileText, HelpCircle, Loader2, FileDown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
-import { Order } from '@/lib/types';
+import { Order, ORDER_STATUS_LABELS } from '@/lib/types';
 import { Link } from 'react-router-dom';
+import { format } from 'date-fns';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import { toast } from 'sonner';
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -14,6 +18,17 @@ export default function MitraDashboard() {
   const { mitra, user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  const [showTimeout, setShowTimeout] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!mitra) setShowTimeout(true);
+    }, 5000); // 5 detik timeout
+
+    return () => clearTimeout(timer);
+  }, [mitra]);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -38,12 +53,119 @@ export default function MitraDashboard() {
     fetchOrders();
   }, [mitra?.id]);
 
-  if (!mitra) return null;
+  if (!mitra) {
+    return (
+      <div className="h-[60vh] flex flex-col items-center justify-center gap-4 text-center p-6 bg-white rounded-[3rem] shadow-xl shadow-slate-200/50">
+        <div className="h-24 w-24 bg-blue-50 rounded-full flex items-center justify-center mb-2">
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Menghubungkan Akun Mitra...</h2>
+        <p className="text-slate-500 max-w-md font-medium">
+          Kami sedang menyinkronkan data toko Anda. Jika halaman ini tidak berubah dalam beberapa detik, silakan coba logout dan login kembali.
+        </p>
+        {showTimeout && (
+          <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold border border-red-100">
+            Sinkronisasi memakan waktu lebih lama dari biasanya. <br/>
+            Pastikan email yang Anda gunakan login sama dengan email yang didaftarkan Admin.
+          </div>
+        )}
+        <Button 
+          variant="outline" 
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-2xl h-12 px-8 font-bold border-slate-200"
+        >
+          Muat Ulang Halaman
+        </Button>
+      </div>
+    );
+  }
 
   const ordersToday = orders.filter((o) => o.updated_at.startsWith(today));
   const activeOrders = orders.filter((o) => o.status !== 'selesai_closed');
   const totalPendapatan = orders.reduce((sum, o) => sum + o.total_price, 0);
   const totalKomisi = totalPendapatan * (mitra.komisi / 100);
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      
+      const dateStr = format(new Date(), 'yyyyMMdd');
+      const workbook = new ExcelJS.Workbook();
+      const ws = workbook.addWorksheet('Data Order');
+
+      // Title & Header
+      const title = `LAPORAN TRANSAKSI - ${mitra.nama_toko.toUpperCase()}`;
+      const titleRow = ws.addRow([title]);
+      titleRow.font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleRow.alignment = { horizontal: 'center' };
+      ws.mergeCells(1, 1, 1, 9);
+      titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+
+      ws.addRow([`Mitra: ${mitra.nama_toko}`]).font = { bold: true };
+      ws.addRow([`Tanggal Download: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`]);
+      ws.addRow([]);
+
+      const columns = [
+        { header: 'Tanggal Masuk', key: 'tgl', width: 22 },
+        { header: 'Kode Order', key: 'kode', width: 15 },
+        { header: 'Customer', key: 'cust', width: 20 },
+        { header: 'Layanan', key: 'layanan', width: 12 },
+        { header: 'Berat/Qty', key: 'qty', width: 10 },
+        { header: 'Total Biaya', key: 'total', width: 15 },
+        { header: 'Status Order', key: 'status', width: 20 },
+        { header: 'Status Bayar', key: 'bayar', width: 15 },
+        { header: 'Metode', key: 'metode', width: 15 },
+      ];
+
+      const headerRow = ws.addRow(columns.map(c => c.header));
+      headerRow.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        cell.font = { bold: true };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+
+      ws.columns = columns.map(c => ({ key: c.key, width: c.width }));
+
+      orders.forEach((o, index) => {
+        const row = ws.addRow([
+          o.tanggal_masuk ? format(new Date(o.tanggal_masuk), 'dd/MM/yyyy HH:mm') : '-',
+          o.kode_order,
+          o.customer_name,
+          o.jenis,
+          o.berat,
+          o.total_price,
+          ORDER_STATUS_LABELS[o.status] || o.status,
+          o.is_paid ? 'LUNAS' : 'BELUM BAYAR',
+          o.payment_method || '-'
+        ]);
+
+        // Status Styling
+        const statusCell = row.getCell(7);
+        statusCell.font = { bold: true, color: { argb: o.status === 'selesai_closed' ? 'FF10B981' : 'FF3B82F6' } };
+
+        // Payment Styling
+        const payCell = row.getCell(8);
+        payCell.font = { bold: true, color: { argb: o.is_paid ? 'FF10B981' : 'FFEF4444' } };
+
+        // Zebra striping
+        if (index % 2 === 0) {
+          row.eachCell(cell => {
+            if (!cell.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+          });
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `Laporan_Mitra_${mitra.nama_toko.replace(/\s+/g, '_')}_${dateStr}.xlsx`);
+      toast.success('Laporan Excel berhasil diunduh');
+    } catch (err) {
+      console.error('Error exporting excel:', err);
+      toast.error('Gagal mengunduh laporan');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading && orders.length === 0) {
     return (
@@ -169,9 +291,18 @@ export default function MitraDashboard() {
                   Lacak Struk Customer
                 </Button>
               </Link>
-              <Button variant="outline" className="w-full justify-start h-12 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 gap-3">
-                <FileText className="h-5 w-5" />
-                Download Laporan
+              <Button 
+                variant="outline" 
+                onClick={handleExportExcel}
+                disabled={exporting}
+                className="w-full justify-start h-12 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 gap-3 disabled:opacity-50"
+              >
+                {exporting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <FileText className="h-5 w-5" />
+                )}
+                {exporting ? 'Exporting...' : 'Download Laporan'}
               </Button>
             </div>
           </Card>
@@ -180,7 +311,13 @@ export default function MitraDashboard() {
             <div className="relative z-10">
               <h3 className="text-lg font-bold mb-2">Butuh Bantuan?</h3>
               <p className="text-slate-400 text-xs mb-6 leading-relaxed">Hubungi admin pusat jika Anda mengalami kendala operasional atau teknis.</p>
-              <Button className="w-full bg-white text-slate-900 hover:bg-slate-100 font-black text-xs h-10 rounded-xl uppercase tracking-widest">
+              <Button 
+                onClick={() => {
+                  const message = `Halo Admin Pusat, saya dari mitra ${mitra.nama_toko} ingin bertanya mengenai...`;
+                  window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(message)}`, '_blank');
+                }}
+                className="w-full bg-white text-slate-900 hover:bg-slate-100 font-black text-xs h-10 rounded-xl uppercase tracking-widest"
+              >
                 Hubungi Admin
               </Button>
             </div>

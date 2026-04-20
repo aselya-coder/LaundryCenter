@@ -39,7 +39,7 @@ export default function MitraNewOrder() {
     catatan: '',
     tanggal_selesai: '',
     payment_method: 'tunai' as 'tunai' | 'transfer',
-    is_paid: false
+    is_paid: true
   });
 
   const [items, setItems] = useState<{ item: string; qty: number }[]>([{ item: '', qty: 1 }]);
@@ -134,7 +134,7 @@ export default function MitraNewOrder() {
           catatan: form.catatan,
           tanggal_selesai: form.tanggal_selesai,
           is_paid: form.is_paid,
-          payment_method: form.payment_method,
+          payment_method: form.is_paid ? form.payment_method : null,
           items_detail: items.filter(i => i.item.trim() !== '')
         }])
         .select()
@@ -172,7 +172,7 @@ export default function MitraNewOrder() {
       catatan: '',
       tanggal_selesai: '',
       payment_method: 'tunai',
-      is_paid: false
+      is_paid: true
     });
     setItems([{ item: '', qty: 1 }]);
   };

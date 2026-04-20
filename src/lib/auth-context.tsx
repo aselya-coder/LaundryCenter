@@ -19,37 +19,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserData = useCallback(async (userId: string, email: string) => {
     try {
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      // 1. Dapatkan profil. Coba ID dulu, kalau gagal coba Email.
+      let { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      
+      if (!profile) {
+        const { data: byEmail } = await supabase.from('profiles').select('*').eq('email', email).maybeSingle();
+        profile = byEmail;
+      }
 
-      if (userError || !userData) {
-        // Fallback jika profil di tabel users belum dibuat (misal: admin pertama)
+      if (!profile) {
+        // Fallback admin
         if (email === 'admin@laundry.com') {
           const adminUser: User = { id: userId, nama: 'Admin Pusat', email: 'admin@laundry.com', role: 'admin' };
           setUser(adminUser);
           setMitra(null);
           return;
         }
+        setUser(null);
+        setMitra(null);
         return;
       }
 
-      setUser(userData);
+      // 2. Set user state (gunakan ID auth baru agar konsisten di app)
+      const currentUser: User = { 
+        id: userId, 
+        nama: profile.nama, 
+        email: profile.email, 
+        role: profile.role as 'admin' | 'mitra' 
+      };
+      setUser(currentUser);
 
-      if (userData.role === 'mitra') {
+      // 3. Dapatkan data mitra jika role mitra
+      if (profile.role === 'mitra') {
+        // Cari mitra yang terhubung dengan profil ini (pakai ID asli dari database profil)
         const { data: mitraData } = await supabase
           .from('mitra')
           .select('*')
-          .eq('user_id', userData.id)
+          .eq('user_id', profile.id)
           .maybeSingle();
-        setMitra(mitraData);
+        
+        if (mitraData) {
+          setMitra(mitraData);
+          
+          // Sinkronisasi ID di background jika berbeda agar login berikutnya lebih cepat
+          if (profile.id !== userId) {
+            // Kita coba update profil dan mitra (mungkin gagal RLS, tapi state sudah aman di atas)
+            supabase.from('profiles').update({ id: userId }).eq('email', email).then(() => {
+              supabase.from('mitra').update({ user_id: userId }).eq('id', mitraData.id).then();
+            });
+          }
+        } else {
+          setMitra(null);
+        }
       } else {
         setMitra(null);
       }
     } catch (err) {
-      console.error('Error fetching user data:', err);
+      console.error('Auth error:', err);
+      setUser(null);
+      setMitra(null);
     }
   }, []);
 

@@ -9,7 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { id } from "date-fns/locale";
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { toast } from 'sonner';
 
 export default function AdminReports() {
@@ -55,6 +56,43 @@ export default function AdminReports() {
     fetchData();
   }, []);
 
+  // Self-Healing: Otomatis lunaskan order yang sudah 'selesai_closed' tapi belum 'is_paid'
+  useEffect(() => {
+    const healClosedOrders = async () => {
+      const closedUnpaid = orders.filter(o => o.status === 'selesai_closed' && !o.is_paid);
+      
+      if (closedUnpaid.length > 0) {
+        console.log(`Self-healing: Melunaskan ${closedUnpaid.length} order yang sudah selesai.`);
+        const ids = closedUnpaid.map(o => o.id);
+        
+        try {
+          const { error } = await supabase
+            .from('orders')
+            .update({ 
+              is_paid: true, 
+              payment_method: 'tunai',
+              updated_at: new Date().toISOString() 
+            })
+            .in('id', ids);
+
+          if (!error) {
+            // Update local state agar angka langsung berubah tanpa reload
+            setOrders(prev => prev.map(o => 
+              ids.includes(o.id) ? { ...o, is_paid: true, payment_method: 'tunai' } : o
+            ));
+            toast.info(`${closedUnpaid.length} order lama otomatis ditandai LUNAS karena sudah selesai.`);
+          }
+        } catch (err) {
+          console.error('Self-healing failed:', err);
+        }
+      }
+    };
+
+    if (orders.length > 0) {
+      healClosedOrders();
+    }
+  }, [orders]);
+
   // Filter order berdasarkan rentang tanggal
   const filteredByDate = useMemo(() => {
     if (!dateRange.from || !dateRange.to) return orders;
@@ -83,7 +121,8 @@ export default function AdminReports() {
 
   const totalExpenses = useMemo(() => filteredExpenses.reduce((sum, e) => sum + e.jumlah, 0), [filteredExpenses]);
 
-  // Logika Keuangan: Hanya menghitung order yang sudah 'selesai_closed' sebagai omzet tetap
+  // Logika Keuangan
+  const totalOmzetBruto = useMemo(() => filteredByDate.reduce((sum, o) => sum + o.total_price, 0), [filteredByDate]);
   const settledOrders = useMemo(() => filteredByDate.filter(o => o.status === 'selesai_closed' || o.is_paid), [filteredByDate]);
   const pendingOrders = useMemo(() => filteredByDate.filter(o => o.status !== 'selesai_closed' && !o.is_paid), [filteredByDate]);
   
@@ -91,19 +130,21 @@ export default function AdminReports() {
   const totalOmzetPending = useMemo(() => pendingOrders.reduce((sum, o) => sum + o.total_price, 0), [pendingOrders]);
 
   const mitraReport = useMemo(() => mitraList.map((m) => {
-    const mitraOrders = settledOrders.filter(o => o.mitra_id === m.id);
+    const mitraOrders = filteredByDate.filter(o => o.mitra_id === m.id);
     const mTotal = mitraOrders.reduce((sum, o) => sum + o.total_price, 0);
+    const mSettled = mitraOrders.filter(o => o.status === 'selesai_closed' || o.is_paid).reduce((sum, o) => sum + o.total_price, 0);
     const mOrders = mitraOrders.length;
 
     return { 
       nama: m.nama_toko, 
       total: mTotal, 
-      komisi: mTotal * (m.komisi / 100), 
-      bersih: mTotal * (1 - m.komisi / 100), 
+      settled: mSettled,
+      komisi: mSettled * (m.komisi / 100), 
+      bersih: mSettled * (1 - m.komisi / 100), 
       orders: mOrders,
       initial: m.nama_toko.charAt(0)
     };
-  }), [mitraList, settledOrders]);
+  }), [mitraList, filteredByDate]);
 
   const totalKomisi = useMemo(() => settledOrders.reduce((sum, o) => {
     const mitra = mitraList.find(m => m.id === o.mitra_id);
@@ -111,66 +152,206 @@ export default function AdminReports() {
     return sum + (o.total_price * (komisiPersen / 100));
   }, 0), [settledOrders, mitraList]);
 
+  const handleMarkAsPaid = async (orderId: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          is_paid: true, 
+          payment_method: 'tunai',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', orderId);
+
+      if (error) throw error;
+      toast.success('Order berhasil ditandai LUNAS');
+      
+      // Refresh data
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          mitra:mitra(nama_toko)
+        `)
+        .order('tanggal_masuk', { ascending: false });
+      
+      if (ordersData) setOrders(ordersData);
+    } catch (err) {
+      console.error('Error marking as paid:', err);
+      toast.error('Gagal memperbarui status pembayaran');
+    }
+  };
+
   const totalBersihRevenue = totalOmzetSettled - totalKomisi;
   const netProfit = totalBersihRevenue - totalExpenses;
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
       setExporting(true);
       
-      // 1. Data Transaksi Detail
-      const transactionData = filteredByDate.map(o => ({
-        'Tanggal Masuk': format(new Date(o.tanggal_masuk), 'dd/MM/yyyy HH:mm'),
-        'Kode Order': o.kode_order,
-        'Customer': o.customer_name,
-        'Mitra': mitraList.find(m => m.id === o.mitra_id)?.nama_toko || 'Unknown',
-        'Layanan': o.jenis,
-        'Kuantitas': o.berat,
-        'Total Biaya': o.total_price,
-        'Status Order': o.status,
-        'Status Bayar': o.is_paid ? 'LUNAS' : 'BELUM BAYAR',
-        'Metode': o.payment_method || '-'
-      }));
-
-      // 2. Data Ringkasan Mitra
-      const summaryData = mitraReport.map(m => ({
-        'Nama Mitra': m.nama,
-        'Total Order': m.orders,
-        'Total Omzet': m.total,
-        'Komisi Mitra': m.komisi,
-        'Pendapatan Bersih': m.bersih
-      }));
-
-      // 3. Data Pengeluaran
-      const expenseExportData = filteredExpenses.map(e => ({
-        'Tanggal': format(new Date(e.tanggal), 'dd/MM/yyyy'),
-        'Kategori': e.kategori,
-        'Jumlah': e.jumlah,
-        'Keterangan': e.keterangan || '-'
-      }));
-
-      // Buat Workbook
-      const wb = XLSX.utils.book_new();
-      
-      // Tambahkan Sheet Detail Transaksi
-      const wsTransactions = XLSX.utils.json_to_sheet(transactionData);
-      XLSX.utils.book_append_sheet(wb, wsTransactions, "Detail Transaksi");
-
-      // Tambahkan Sheet Ringkasan Mitra
-      const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan Mitra");
-
-      // Tambahkan Sheet Pengeluaran
-      const wsExpenses = XLSX.utils.json_to_sheet(expenseExportData);
-      XLSX.utils.book_append_sheet(wb, wsExpenses, "Daftar Pengeluaran");
-
-      // Generate Nama File berdasarkan periode
       const dateStr = dateRange.from && dateRange.to 
         ? `${format(dateRange.from, 'yyyyMMdd')}-${format(dateRange.to, 'yyyyMMdd')}`
         : format(new Date(), 'yyyyMMdd');
+
+      const workbook = new ExcelJS.Workbook();
       
-      // Download File
-      XLSX.writeFile(wb, `Laporan_Lengkap_LaundryCenter_${dateStr}.xlsx`);
+      // Helper untuk styling sheet
+      const setupSheet = (sheet: ExcelJS.Worksheet, title: string, columns: any[]) => {
+        // Title
+        const titleRow = sheet.addRow([title]);
+        titleRow.font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+        titleRow.alignment = { horizontal: 'center' };
+        sheet.mergeCells(1, 1, 1, columns.length);
+        titleRow.getCell(1).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF2563EB' } // Blue-600
+        };
+
+        // Periode
+        const periodRow = sheet.addRow([`Periode: ${dateStr}`]);
+        periodRow.font = { bold: true };
+        sheet.mergeCells(2, 1, 2, columns.length);
+        
+        sheet.addRow([]); // Empty row
+
+        // Header Table
+        const headerRow = sheet.addRow(columns.map(c => c.header));
+        headerRow.eachCell((cell) => {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF1F5F9' } // Slate-100
+          };
+          cell.font = { bold: true, color: { argb: 'FF334155' } }; // Slate-700
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        });
+
+        // Set column widths
+        sheet.columns = columns.map(c => ({ 
+          key: c.key, 
+          width: c.width || 20,
+          style: { alignment: { horizontal: 'left' } }
+        }));
+
+        return headerRow.number;
+      };
+
+      // 1. Sheet Detail Transaksi
+      const wsDetail = workbook.addWorksheet('Detail Transaksi');
+      const detailCols = [
+        { header: 'Tanggal Masuk', key: 'tgl', width: 22 },
+        { header: 'Kode Order', key: 'kode', width: 15 },
+        { header: 'Customer', key: 'cust', width: 20 },
+        { header: 'Mitra', key: 'mitra', width: 20 },
+        { header: 'Layanan', key: 'layanan', width: 12 },
+        { header: 'Berat/Qty', key: 'qty', width: 10 },
+        { header: 'Total Biaya', key: 'total', width: 15 },
+        { header: 'Status Order', key: 'status', width: 15 },
+        { header: 'Status Bayar', key: 'bayar', width: 15 },
+        { header: 'Metode', key: 'metode', width: 15 },
+      ];
+      setupSheet(wsDetail, 'LAPORAN DETAIL TRANSAKSI LAUNDRYCENTER', detailCols);
+
+      filteredByDate.forEach((o, index) => {
+        const row = wsDetail.addRow([
+          o.tanggal_masuk ? format(new Date(o.tanggal_masuk), 'dd/MM/yyyy HH:mm') : '-',
+          o.kode_order,
+          o.customer_name,
+          mitraList.find(m => m.id === o.mitra_id)?.nama_toko || 'Unknown',
+          o.jenis,
+          o.berat,
+          o.total_price,
+          o.status,
+          o.is_paid ? 'LUNAS' : 'BELUM BAYAR',
+          o.payment_method || '-'
+        ]);
+
+        // Style status colors
+        const statusCell = row.getCell(8);
+        if (o.status === 'selesai_closed') {
+          statusCell.font = { color: { argb: 'FF10B981' }, bold: true }; // Green
+        } else {
+          statusCell.font = { color: { argb: 'FF3B82F6' }, bold: true }; // Blue
+        }
+
+        const bayarCell = row.getCell(9);
+        if (o.is_paid) {
+          bayarCell.font = { color: { argb: 'FF10B981' }, bold: true };
+        } else {
+          bayarCell.font = { color: { argb: 'FFEF4444' }, bold: true }; // Red
+        }
+
+        // Zebra striping
+        if (index % 2 === 0) {
+          row.eachCell((cell) => {
+            if (!cell.fill) {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+            }
+          });
+        }
+      });
+
+      // 2. Sheet Ringkasan Mitra
+      const wsSummary = workbook.addWorksheet('Ringkasan Mitra');
+      const summaryCols = [
+        { header: 'Nama Mitra', key: 'nama', width: 25 },
+        { header: 'Total Order', key: 'orders', width: 15 },
+        { header: 'Total Omzet', key: 'total', width: 15 },
+        { header: 'Komisi Mitra', key: 'komisi', width: 15 },
+        { header: 'Pendapatan Bersih', key: 'bersih', width: 20 },
+      ];
+      setupSheet(wsSummary, 'RINGKASAN PERFORMA MITRA', summaryCols);
+
+      mitraReport.forEach((m, index) => {
+        const row = wsSummary.addRow([
+          m.nama,
+          m.orders,
+          m.total,
+          m.komisi,
+          m.bersih
+        ]);
+        if (index % 2 === 0) {
+          row.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+          });
+        }
+      });
+
+      // 3. Sheet Pengeluaran
+      const wsExpenses = workbook.addWorksheet('Daftar Pengeluaran');
+      const expenseCols = [
+        { header: 'Tanggal', key: 'tgl', width: 15 },
+        { header: 'Kategori', key: 'kat', width: 20 },
+        { header: 'Jumlah', key: 'jumlah', width: 15 },
+        { header: 'Keterangan', key: 'ket', width: 35 },
+      ];
+      setupSheet(wsExpenses, 'DAFTAR PENGELUARAN OPERASIONAL', expenseCols);
+
+      filteredExpenses.forEach((e, index) => {
+        const row = wsExpenses.addRow([
+          e.tanggal ? format(new Date(e.tanggal), 'dd/MM/yyyy') : '-',
+          e.kategori,
+          e.jumlah,
+          e.keterangan || '-'
+        ]);
+        row.getCell(3).font = { color: { argb: 'FFEF4444' }, bold: true };
+        if (index % 2 === 0) {
+          row.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+          });
+        }
+      });
+
+      // Write and Save
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `Laporan_Lengkap_LaundryCenter_${dateStr}.xlsx`);
       toast.success('Laporan Excel berhasil diunduh');
     } catch (err) {
       console.error('Error exporting excel:', err);
@@ -243,7 +424,7 @@ export default function AdminReports() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card className="p-6 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl group overflow-hidden relative">
           <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
             <TrendingUp className="h-24 w-24 text-blue-600" />
@@ -253,8 +434,22 @@ export default function AdminReports() {
               <TrendingUp className="h-5 w-5" />
             </div>
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Omzet Bruto</p>
-            <h3 className="text-2xl font-black text-slate-900">Rp {totalOmzetSettled.toLocaleString('id-ID')}</h3>
-            <p className="text-[10px] text-slate-400 font-bold mt-1">Hanya order lunas/selesai</p>
+            <h3 className="text-xl font-black text-slate-900">Rp {totalOmzetBruto.toLocaleString('id-ID')}</h3>
+            <p className="text-[10px] text-slate-400 font-bold mt-1">Total order</p>
+          </div>
+        </Card>
+
+        <Card className="p-6 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl group overflow-hidden relative">
+          <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
+            <DollarSign className="h-24 w-24 text-green-600" />
+          </div>
+          <div className="relative z-10">
+            <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 mb-4">
+              <DollarSign className="h-5 w-5" />
+            </div>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Omzet Lunas</p>
+            <h3 className="text-xl font-black text-slate-900">Rp {totalOmzetSettled.toLocaleString('id-ID')}</h3>
+            <p className="text-[10px] text-slate-400 font-bold mt-1">Order lunas</p>
           </div>
         </Card>
 
@@ -266,9 +461,9 @@ export default function AdminReports() {
             <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 mb-4">
               <Receipt className="h-5 w-5" />
             </div>
-            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total Pengeluaran</p>
-            <h3 className="text-2xl font-black text-slate-900">Rp {totalExpenses.toLocaleString('id-ID')}</h3>
-            <p className="text-[10px] text-slate-400 font-bold mt-1">Termasuk biaya operasional</p>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Pengeluaran</p>
+            <h3 className="text-xl font-black text-slate-900">Rp {totalExpenses.toLocaleString('id-ID')}</h3>
+            <p className="text-[10px] text-slate-400 font-bold mt-1">Biaya operasional</p>
           </div>
         </Card>
 
@@ -281,8 +476,8 @@ export default function AdminReports() {
               <Wallet className="h-5 w-5" />
             </div>
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Profit Bersih</p>
-            <h3 className="text-2xl font-black text-slate-900">Rp {netProfit.toLocaleString('id-ID')}</h3>
-            <p className="text-[10px] text-slate-400 font-bold mt-1">Omzet - Komisi - Pengeluaran</p>
+            <h3 className="text-xl font-black text-slate-900">Rp {netProfit.toLocaleString('id-ID')}</h3>
+            <p className="text-[10px] text-slate-400 font-bold mt-1">Lunas - Komisi - Biaya</p>
           </div>
         </Card>
 
@@ -294,9 +489,9 @@ export default function AdminReports() {
             <div className="h-10 w-10 rounded-xl bg-red-50 flex items-center justify-center text-red-600 mb-4">
               <Activity className="h-5 w-5" />
             </div>
-            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Piutang (Pending)</p>
-            <h3 className="text-2xl font-black text-slate-900">Rp {totalOmzetPending.toLocaleString('id-ID')}</h3>
-            <p className="text-[10px] text-slate-400 font-bold mt-1">Order belum lunas</p>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Piutang</p>
+            <h3 className="text-xl font-black text-slate-900">Rp {totalOmzetPending.toLocaleString('id-ID')}</h3>
+            <p className="text-[10px] text-slate-400 font-bold mt-1">Belum lunas</p>
           </div>
         </Card>
       </div>
@@ -408,6 +603,65 @@ export default function AdminReports() {
           </table>
         </div>
       </Card>
+
+      {pendingOrders.length > 0 && (
+        <Card className="p-8 border-none shadow-xl shadow-red-100 bg-white rounded-3xl border-l-4 border-l-red-500">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Activity className="h-5 w-5 text-red-600" />
+                Daftar Piutang (Belum Lunas)
+              </h3>
+              <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-wider">Order yang menyebabkan angka piutang muncul</p>
+            </div>
+            <div className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-xs font-black">
+              TOTAL: Rp {totalOmzetPending.toLocaleString('id-ID')}
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] border-b border-slate-50">
+                  <th className="text-left py-4 px-2">Kode / Customer</th>
+                  <th className="text-left py-4 px-2">Mitra</th>
+                  <th className="text-left py-4 px-2">Tanggal</th>
+                  <th className="text-left py-4 px-2">Total</th>
+                  <th className="text-right py-4 px-2">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {pendingOrders.map((o) => (
+                  <tr key={o.id} className="group hover:bg-red-50/30 transition-colors">
+                    <td className="py-4 px-2">
+                      <p className="text-xs font-black text-blue-600">#{o.kode_order}</p>
+                      <p className="text-sm font-bold text-slate-900">{o.customer_name}</p>
+                    </td>
+                    <td className="py-4 px-2">
+                      <span className="text-xs font-bold text-slate-600">{mitraList.find(m => m.id === o.mitra_id)?.nama_toko || '-'}</span>
+                    </td>
+                    <td className="py-4 px-2 text-xs font-bold text-slate-400">
+                      {o.tanggal_masuk ? format(new Date(o.tanggal_masuk), 'dd MMM yyyy', { locale: id }) : '-'}
+                    </td>
+                    <td className="py-4 px-2 text-sm font-black text-slate-900">
+                      Rp {o.total_price.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-4 px-2 text-right">
+                      <Button 
+                        size="sm"
+                        onClick={() => handleMarkAsPaid(o.id)}
+                        className="bg-green-600 hover:bg-green-700 text-white text-[10px] font-black h-8 rounded-lg uppercase tracking-widest"
+                      >
+                        Set Lunas
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

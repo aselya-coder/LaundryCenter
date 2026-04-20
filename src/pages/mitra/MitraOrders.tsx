@@ -4,12 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
-import { Order, OrderStatus, ORDER_STATUS_LABELS, STATUS_RESPONSIBILITY } from '@/lib/types';
-import { Search, Calendar, User, Tag, DollarSign, Clock, Loader2, Phone, Share2, ExternalLink, Package, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Order, OrderStatus, ORDER_STATUS_LABELS, STATUS_RESPONSIBILITY, ORDER_STATUS_FLOW } from '@/lib/types';
+import { Search, Calendar, User, Tag, DollarSign, Clock, Loader2, Phone, Share2, ExternalLink, Package, CheckCircle2, AlertCircle, FileDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { NextActionCard } from '@/components/order/NextActionCard';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
+import { format } from 'date-fns';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 export default function MitraOrders() {
   const { mitra } = useAuth();
@@ -18,6 +21,7 @@ export default function MitraOrders() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [exporting, setExporting] = useState(false);
 
   const fetchOrders = async () => {
     if (!mitra?.id) return;
@@ -54,8 +58,8 @@ export default function MitraOrders() {
   }, [orders]);
 
   const handleUpdateStatus = async (order: Order) => {
-    const currentIdx = ['diterima_mitra', 'dikirim_ke_pusat', 'diproses', 'dicuci', 'dikeringkan', 'disetrika', 'selesai_pusat', 'dikirim_ke_mitra', 'siap_diambil', 'selesai_closed'].indexOf(order.status);
-    const nextStatus = currentIdx < 9 ? ['diterima_mitra', 'dikirim_ke_pusat', 'diproses', 'dicuci', 'dikeringkan', 'disetrika', 'selesai_pusat', 'dikirim_ke_mitra', 'siap_diambil', 'selesai_closed'][currentIdx + 1] as OrderStatus : null;
+    const currentIdx = ORDER_STATUS_FLOW.indexOf(order.status);
+    const nextStatus = currentIdx < ORDER_STATUS_FLOW.length - 1 ? ORDER_STATUS_FLOW[currentIdx + 1] : null;
 
     if (!nextStatus) return;
 
@@ -66,12 +70,22 @@ export default function MitraOrders() {
     }
 
     try {
+      const updateData: any = { 
+        status: nextStatus, 
+        updated_at: new Date().toISOString() 
+      };
+
+      // Jika status berubah menjadi selesai_closed, otomatis lunas
+      if (nextStatus === 'selesai_closed') {
+        updateData.is_paid = true;
+        if (!order.payment_method) {
+          updateData.payment_method = 'tunai';
+        }
+      }
+
       const { error } = await supabase
         .from('orders')
-        .update({ 
-          status: nextStatus, 
-          updated_at: new Date().toISOString() 
-        })
+        .update(updateData)
         .eq('id', order.id);
 
       if (error) throw error;
@@ -82,11 +96,18 @@ export default function MitraOrders() {
         .insert([{
           order_id: order.id,
           status: nextStatus,
-          catatan: `Status diperbarui ke ${ORDER_STATUS_LABELS[nextStatus]}`
+          catatan: nextStatus === 'selesai_closed' 
+            ? `Order selesai & pembayaran otomatis ditandai LUNAS` 
+            : `Status diperbarui oleh Mitra ke ${ORDER_STATUS_LABELS[nextStatus]}`
         }]);
 
-      toast.success(`Status order diperbarui ke "${ORDER_STATUS_LABELS[nextStatus]}"`);
-      fetchOrders();
+      if (nextStatus === 'selesai_closed') {
+        toast.success(`Order selesai! Pembayaran otomatis ditandai LUNAS.`);
+      } else {
+        toast.success(`Status diperbarui ke "${ORDER_STATUS_LABELS[nextStatus]}"`);
+      }
+      
+      await fetchOrders();
     } catch (err: any) {
       console.error('Error updating status:', err);
       toast.error('Gagal memperbarui status order');
@@ -131,6 +152,89 @@ export default function MitraOrders() {
     }
   };
 
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      
+      const dateStr = format(new Date(), 'yyyyMMdd');
+      const workbook = new ExcelJS.Workbook();
+      const ws = workbook.addWorksheet('Data Order');
+
+      // Title & Header
+      const title = `LAPORAN TRANSAKSI - ${mitra?.nama_toko?.toUpperCase()}`;
+      const titleRow = ws.addRow([title]);
+      titleRow.font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleRow.alignment = { horizontal: 'center' };
+      ws.mergeCells(1, 1, 1, 9);
+      titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+
+      ws.addRow([`Mitra: ${mitra?.nama_toko}`]).font = { bold: true };
+      ws.addRow([`Filter: ${filterStatus === 'all' ? 'Semua Status' : ORDER_STATUS_LABELS[filterStatus as any]}`]);
+      ws.addRow([`Tanggal Download: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`]);
+      ws.addRow([]);
+
+      const columns = [
+        { header: 'Tanggal Masuk', key: 'tgl', width: 22 },
+        { header: 'Kode Order', key: 'kode', width: 15 },
+        { header: 'Customer', key: 'cust', width: 20 },
+        { header: 'Layanan', key: 'layanan', width: 12 },
+        { header: 'Berat/Qty', key: 'qty', width: 10 },
+        { header: 'Total Biaya', key: 'total', width: 15 },
+        { header: 'Status Order', key: 'status', width: 20 },
+        { header: 'Status Bayar', key: 'bayar', width: 15 },
+        { header: 'Metode', key: 'metode', width: 15 },
+      ];
+
+      const headerRow = ws.addRow(columns.map(c => c.header));
+      headerRow.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        cell.font = { bold: true };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+
+      ws.columns = columns.map(c => ({ key: c.key, width: c.width }));
+
+      filteredOrders.forEach((o, index) => {
+        const row = ws.addRow([
+          o.tanggal_masuk ? format(new Date(o.tanggal_masuk), 'dd/MM/yyyy HH:mm') : '-',
+          o.kode_order,
+          o.customer_name,
+          o.jenis,
+          o.berat,
+          o.total_price,
+          ORDER_STATUS_LABELS[o.status] || o.status,
+          o.is_paid ? 'LUNAS' : 'BELUM BAYAR',
+          o.payment_method || '-'
+        ]);
+
+        // Status Styling
+        const statusCell = row.getCell(7);
+        statusCell.font = { bold: true, color: { argb: o.status === 'selesai_closed' ? 'FF10B981' : 'FF3B82F6' } };
+
+        // Payment Styling
+        const payCell = row.getCell(8);
+        payCell.font = { bold: true, color: { argb: o.is_paid ? 'FF10B981' : 'FFEF4444' } };
+
+        // Zebra striping
+        if (index % 2 === 0) {
+          row.eachCell(cell => {
+            if (!cell.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+          });
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `Laporan_Mitra_${mitra?.nama_toko?.replace(/\s+/g, '_')}_${dateStr}.xlsx`);
+      toast.success('Laporan Excel berhasil diunduh');
+    } catch (err) {
+      console.error('Error exporting excel:', err);
+      toast.error('Gagal mengunduh laporan');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       const matchesSearch =
@@ -158,11 +262,26 @@ export default function MitraOrders() {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Riwayat Order</h1>
           <p className="text-slate-500 font-medium">Pantau dan kelola semua pesanan laundry di outlet Anda</p>
         </div>
-        <Link to="/mitra/new-order">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-12 px-6 shadow-lg shadow-blue-100 font-bold gap-2 transition-all active:scale-95">
-            Buat Order Baru
+        <div className="flex flex-wrap items-center gap-3">
+          <Button 
+            onClick={handleExportExcel}
+            disabled={exporting}
+            variant="outline" 
+            className="h-12 px-6 rounded-2xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 gap-2 disabled:opacity-50"
+          >
+            {exporting ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <FileDown className="h-5 w-5" />
+            )}
+            {exporting ? 'Exporting...' : 'Export Excel'}
           </Button>
-        </Link>
+          <Link to="/mitra/new-order">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-12 px-6 shadow-lg shadow-blue-100 font-bold gap-2 transition-all active:scale-95">
+              Buat Order Baru
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Ringkasan Dashboard Mitra */}

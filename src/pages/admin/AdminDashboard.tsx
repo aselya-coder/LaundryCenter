@@ -42,17 +42,19 @@ export default function AdminDashboard() {
   }, []);
 
   const ordersToday = useMemo(() => orders.filter((o) => {
-    // Extract date part from ISO string (YYYY-MM-DD)
-    const orderDate = o.updated_at.split('T')[0];
+    if (!o.tanggal_masuk) return false;
+    const orderDate = o.tanggal_masuk.split('T')[0];
     return orderDate === today;
   }), [orders]);
   
-  const totalRevenue = useMemo(() => orders.filter(o => o.is_paid).reduce((sum, o) => sum + o.total_price, 0), [orders]);
+  const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + o.total_price, 0), [orders]);
+  const totalPaidRevenue = useMemo(() => orders.filter(o => o.is_paid).reduce((sum, o) => sum + o.total_price, 0), [orders]);
   const totalExpenses = useMemo(() => expenses.reduce((sum, e) => sum + e.jumlah, 0), [expenses]);
-  const netProfit = totalRevenue - totalExpenses;
+  const netProfit = totalPaidRevenue - totalExpenses;
 
   const cityData = useMemo(() => mitraList.reduce((acc, m) => {
-    acc[m.kota] = (acc[m.kota] || 0) + 1;
+    const kota = m.kota || 'Lainnya';
+    acc[kota] = (acc[kota] || 0) + 1;
     return acc;
   }, {} as Record<string, number>), [mitraList]);
 
@@ -72,17 +74,22 @@ export default function AdminDashboard() {
     return last7Days.map(date => {
       const dayIndex = new Date(date).getDay();
       const amount = orders
-        .filter(o => o.updated_at.split('T')[0] === date && o.is_paid)
+        .filter(o => o.tanggal_masuk && o.tanggal_masuk.split('T')[0] === date)
+        .reduce((sum, o) => sum + o.total_price, 0);
+      
+      const paidAmount = orders
+        .filter(o => o.tanggal_masuk && o.tanggal_masuk.split('T')[0] === date && o.is_paid)
         .reduce((sum, o) => sum + o.total_price, 0);
       
       const expenseAmount = expenses
-        .filter(e => e.tanggal === date)
+        .filter(e => e.tanggal && e.tanggal.split('T')[0] === date)
         .reduce((sum, e) => sum + e.jumlah, 0);
       
       return {
         day: dayLabels[dayIndex],
         date: date,
         revenue: amount,
+        paidRevenue: paidAmount,
         expense: expenseAmount
       };
     });
@@ -165,7 +172,11 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest">
               <div className="flex items-center gap-1.5 text-blue-600">
                 <div className="h-2 w-2 rounded-full bg-blue-600"></div>
-                Omzet
+                Omzet Total
+              </div>
+              <div className="flex items-center gap-1.5 text-green-500">
+                <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                Omzet Lunas
               </div>
               <div className="flex items-center gap-1.5 text-red-500">
                 <div className="h-2 w-2 rounded-full bg-red-500"></div>
@@ -181,6 +192,10 @@ export default function AdminDashboard() {
                     <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
                   </linearGradient>
+                  <linearGradient id="colorPaidRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
                   <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
@@ -193,10 +208,11 @@ export default function AdminDashboard() {
                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
                   formatter={(value: any, name: string) => [
                     `Rp ${value.toLocaleString('id-ID')}`, 
-                    name === 'revenue' ? 'Omzet' : 'Pengeluaran'
+                    name === 'revenue' ? 'Omzet Total' : name === 'paidRevenue' ? 'Omzet Lunas' : 'Pengeluaran'
                   ]}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
+                <Area type="monotone" dataKey="paidRevenue" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorPaidRevenue)" />
                 <Area type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={4} fillOpacity={1} fill="url(#colorExpense)" />
               </AreaChart>
             </ResponsiveContainer>

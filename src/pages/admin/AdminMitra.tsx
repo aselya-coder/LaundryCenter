@@ -7,11 +7,22 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { Mitra } from '@/lib/types';
-import { PlusCircle, MapPin, Percent, Search, Edit2, Power, Store, Loader2 } from 'lucide-react';
+import { 
+  PlusCircle, 
+  MapPin, 
+  Percent, 
+  Search, 
+  Edit2, 
+  Power, 
+  Store, 
+  Loader2, 
+  Mail 
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminMitra() {
   const [mitraList, setMitraList] = useState<Mitra[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [open, setOpen] = useState(false);
@@ -23,12 +34,21 @@ export default function AdminMitra() {
     komisi: '20',
     email: '',
     password: '',
-    nama_owner: ''
+    nama_owner: '',
+    user_id: '' // Tambahkan user_id ke form
   });
 
   const fetchMitra = async () => {
     try {
       setLoading(true);
+      
+      // Ambil semua akun mitra untuk dropdown
+      const { data: accData } = await supabase
+        .from('profiles')
+        .select('id, nama, email')
+        .eq('role', 'mitra');
+      setAccounts(accData || []);
+
       // Menggunakan fetch manual dua tahap agar tidak error 400 saat join gagal di database
       const { data: mitraData, error: mitraError } = await supabase
         .from('mitra')
@@ -47,17 +67,17 @@ export default function AdminMitra() {
       if (userIds.length > 0) {
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('id, nama')
+          .select('id, nama, email')
           .in('id', userIds);
         
         // Gabungkan data mitra dengan data profil (nama owner)
         const mappedData = mitraData.map(m => ({
           ...m,
-          user: profileData?.find(p => p.id === m.user_id) || { nama: 'Unknown Owner' }
+          user: profileData?.find(p => p.id === m.user_id) || { nama: 'Unknown Owner', email: '' }
         }));
         setMitraList(mappedData);
       } else {
-        setMitraList(mitraData.map(m => ({ ...m, user: { nama: 'No Owner' } })));
+        setMitraList(mitraData.map(m => ({ ...m, user: { nama: 'No Owner', email: '' } })));
       }
     } catch (err) {
       console.error('Error fetching mitra:', err);
@@ -90,17 +110,19 @@ export default function AdminMitra() {
             alamat: form.alamat,
             kota: form.kota,
             komisi: Number(form.komisi),
+            user_id: form.user_id || editingMitra.user_id // Update user_id jika diubah
           })
           .eq('id', editingMitra.id);
         
         if (mitraError) throw mitraError;
 
-        // Update nama owner di tabel profiles jika ada user_id
-        if (editingMitra.user_id && form.nama_owner) {
+        // Update nama owner di tabel profiles jika ada user_id yang terhubung
+        const targetUserId = form.user_id || editingMitra.user_id;
+        if (targetUserId && form.nama_owner) {
           const { error: userError } = await supabase
             .from('profiles')
             .update({ nama: form.nama_owner })
-            .eq('id', editingMitra.user_id);
+            .eq('id', targetUserId);
           
           if (userError) throw userError;
         }
@@ -158,7 +180,8 @@ export default function AdminMitra() {
       komisi: '20',
       email: '',
       password: '',
-      nama_owner: ''
+      nama_owner: '',
+      user_id: ''
     });
     setEditingMitra(null);
     setOpen(false);
@@ -172,8 +195,9 @@ export default function AdminMitra() {
       kota: mitra.kota,
       komisi: String(mitra.komisi),
       nama_owner: mitra.user?.nama || '',
-      email: '', // Email dan password tidak dapat diubah di sini
-      password: ''
+      email: '', 
+      password: '',
+      user_id: mitra.user_id || ''
     });
     setOpen(true);
   };
@@ -229,6 +253,33 @@ export default function AdminMitra() {
             <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 no-scrollbar">
               <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4 mb-2">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">Informasi Akun Login</p>
+                
+                {editingMitra && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Hubungkan ke Akun</Label>
+                    <select 
+                      value={form.user_id} 
+                      onChange={(e) => {
+                        const selectedAcc = accounts.find(a => a.id === e.target.value);
+                        setForm({
+                          ...form, 
+                          user_id: e.target.value,
+                          nama_owner: selectedAcc?.nama || form.nama_owner
+                        });
+                      }}
+                      className="w-full h-12 rounded-xl bg-white border-none font-bold shadow-sm px-4 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    >
+                      <option value="">-- Pilih Akun --</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.nama} ({acc.email})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 font-bold px-1 uppercase tracking-tight">Pilih akun ahmad/maria untuk menghubungkan toko ini</p>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nama Owner / User</Label>
                   <Input value={form.nama_owner} onChange={(e) => setForm({...form, nama_owner: e.target.value})} className="h-12 rounded-xl bg-white border-none font-bold shadow-sm" placeholder="Nama Lengkap Owner" />
@@ -302,11 +353,19 @@ export default function AdminMitra() {
                 </Badge>
               </div>
               <h3 className="text-lg font-black text-slate-900 mb-1">{mitra.nama_toko}</h3>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col gap-1 mb-4">
                 <div className="flex items-center gap-1.5 text-slate-400">
                   <MapPin className="h-3.5 w-3.5" />
                   <span className="text-xs font-bold">{mitra.kota}</span>
                 </div>
+                {mitra.user?.email && (
+                  <div className="flex items-center gap-1.5 text-slate-400">
+                    <Mail className="h-3.5 w-3.5" />
+                    <span className="text-xs font-bold truncate">{mitra.user.email}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between mb-4">
                 {mitra.user?.nama && (
                   <div className="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
                     {mitra.user.nama}

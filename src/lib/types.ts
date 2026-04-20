@@ -69,6 +69,7 @@ export interface Mitra {
   aktif: boolean;
   user?: {
     nama: string;
+    email?: string;
   };
 }
 
