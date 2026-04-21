@@ -18,7 +18,9 @@ export default function MitraNewOrder() {
   const { mitra } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fetchingServices, setFetchingServices] = useState(true);
+  const [fetchingItems, setFetchingItems] = useState(true);
   const [services, setServices] = useState<Service[]>([]);
+  const [commonItems, setCommonItems] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [serviceSearch, setServiceSearch] = useState('');
@@ -80,6 +82,33 @@ export default function MitraNewOrder() {
       }
     };
     fetchServices();
+  }, []);
+
+  // Fetch item standard dari database
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        setFetchingItems(true);
+        const { data, error } = await supabase
+          .from('service_items')
+          .select('nama')
+          .eq('aktif', true)
+          .order('nama', { ascending: true });
+        
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setCommonItems(data.map(i => i.nama));
+        } else {
+          // Fallback jika database kosong
+          setCommonItems(['Kaos', 'Kemeja', 'Celana Jeans', 'Jaket', 'Bedcover']);
+        }
+      } catch (err) {
+        console.error('Error fetching items:', err);
+      } finally {
+        setFetchingItems(false);
+      }
+    };
+    fetchItems();
   }, []);
 
   // Hitung total harga otomatis saat layanan atau berat berubah
@@ -400,15 +429,52 @@ export default function MitraNewOrder() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Detail Item (Opsional)</Label>
-                    <Button 
-                      type="button" 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={addItem}
-                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-bold gap-1 h-8 rounded-lg"
-                    >
-                      <Plus className="h-3.5 w-3.5" /> Tambah Item
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          const emptyIdx = items.findIndex(i => !i.item);
+                          if (emptyIdx === -1) addItem();
+                        }}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-bold gap-1 h-8 rounded-lg"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Tambah Baris
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 p-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-full mb-1 ml-1">Cepat Tambah:</span>
+                    {fetchingItems ? (
+                      <div className="flex items-center gap-2 px-2 py-1">
+                        <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                        <span className="text-[10px] font-bold text-slate-400 italic">Memuat item...</span>
+                      </div>
+                    ) : commonItems.map(itemName => (
+                      <button
+                        key={itemName}
+                        type="button"
+                        onClick={() => {
+                          const existingIdx = items.findIndex(i => i.item === itemName);
+                          if (existingIdx !== -1) {
+                            updateItem(existingIdx, 'qty', items[existingIdx].qty + 1);
+                          } else {
+                            const emptyIdx = items.findIndex(i => !i.item);
+                            if (emptyIdx !== -1) {
+                              updateItem(emptyIdx, 'item', itemName);
+                            } else {
+                              setItems([...items, { item: itemName, qty: 1 }]);
+                            }
+                          }
+                          toast.info(`Ditambahkan: ${itemName}`);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-100 text-[10px] font-bold text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm"
+                      >
+                        {itemName}
+                      </button>
+                    ))}
                   </div>
                   
                   <div className="space-y-3">

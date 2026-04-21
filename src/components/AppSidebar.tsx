@@ -36,6 +36,7 @@ const adminItems = [
   { title: 'Dashboard', url: '/admin', icon: LayoutDashboard },
   { title: 'Semua Order', url: '/admin/orders', icon: Package },
   { title: 'Kelola Mitra', url: '/admin/mitra', icon: Building2 },
+  { title: 'Stok Bahan', url: '/admin/inventory', icon: WashingMachine },
   { title: 'Laporan Keuangan', url: '/admin/reports', icon: FileText },
   { title: 'Pengeluaran', url: '/admin/expenses', icon: Receipt },
   { title: 'Daftar Akun', url: '/admin/accounts', icon: Users },
@@ -47,11 +48,22 @@ const mitraItems = [
   { title: 'Riwayat Order', url: '/mitra/orders', icon: History },
 ];
 
+const staffItems = [
+  { title: 'Produksi', url: '/staff', icon: WashingMachine },
+];
+
 export function AppSidebar() {
   const { user, logout, mitra } = useAuth();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === 'collapsed';
-  const items = user?.role === 'admin' ? adminItems : mitraItems;
+  
+  const getItems = () => {
+    if (user?.role === 'admin') return adminItems;
+    if (user?.role === 'staff') return staffItems;
+    return mitraItems;
+  };
+
+  const items = getItems();
 
   return (
     <Sidebar collapsible="icon" className="border-r border-slate-800 bg-sidebar">

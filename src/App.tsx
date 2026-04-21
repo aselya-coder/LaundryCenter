@@ -15,6 +15,8 @@ import AdminReports from "./pages/admin/AdminReports";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminAccounts from "./pages/admin/AdminAccounts";
+import AdminInventory from "./pages/admin/AdminInventory";
+import StaffDashboard from "./pages/StaffDashboard";
 import MitraDashboard from "./pages/mitra/MitraDashboard";
 import MitraNewOrder from "./pages/mitra/MitraNewOrder";
 import MitraOrders from "@/pages/mitra/MitraOrders";
@@ -24,16 +26,22 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: 'admin' | 'mitra' }) {
+function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: 'admin' | 'mitra' | 'staff' }) {
   const { isAuthenticated, user } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (role && user?.role !== role) return <Navigate to={user?.role === 'admin' ? '/admin' : '/mitra'} replace />;
+  if (role && user?.role !== role) {
+    const defaultPath = user?.role === 'admin' ? '/admin' : user?.role === 'staff' ? '/staff' : '/mitra';
+    return <Navigate to={defaultPath} replace />;
+  }
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
 function AuthRedirect() {
   const { isAuthenticated, user } = useAuth();
-  if (isAuthenticated) return <Navigate to={user?.role === 'admin' ? '/admin' : '/mitra'} replace />;
+  if (isAuthenticated) {
+    const defaultPath = user?.role === 'admin' ? '/admin' : user?.role === 'staff' ? '/staff' : '/mitra';
+    return <Navigate to={defaultPath} replace />;
+  }
   return <LoginPage />;
 }
 
@@ -61,7 +69,10 @@ const App = () => (
             <Route path="/admin/reports" element={<ProtectedRoute role="admin"><AdminReports /></ProtectedRoute>} />
             <Route path="/admin/expenses" element={<ProtectedRoute role="admin"><AdminExpenses /></ProtectedRoute>} />
             <Route path="/admin/accounts" element={<ProtectedRoute role="admin"><AdminAccounts /></ProtectedRoute>} />
+            <Route path="/admin/inventory" element={<ProtectedRoute role="admin"><AdminInventory /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute role="admin"><AdminSettings /></ProtectedRoute>} />
+
+            <Route path="/staff" element={<ProtectedRoute role="staff"><StaffDashboard /></ProtectedRoute>} />
 
             <Route path="/mitra" element={<ProtectedRoute role="mitra"><MitraDashboard /></ProtectedRoute>} />
             <Route path="/mitra/new-order" element={<ProtectedRoute role="mitra"><MitraNewOrder /></ProtectedRoute>} />

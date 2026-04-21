@@ -5,21 +5,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
-import { Service } from '@/lib/types';
+import { Service, ServiceItem } from '@/lib/types';
 import { toast } from 'sonner';
-import { PlusCircle, Edit2, Trash2, Save, X, Loader2, Tag, DollarSign, Package } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, Save, X, Loader2, Tag, DollarSign, Package, Shirt } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export default function AdminSettings() {
   const [services, setServices] = useState<Service[]>([]);
+  const [items, setItems] = useState<ServiceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(true);
   const [openDialog, setOpenOpenDialog] = useState(false);
+  const [openItemDialog, setOpenItemDialog] = useState(false);
+  
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editingItem, setEditingItem] = useState<ServiceItem | null>(null);
+
   const [form, setForm] = useState({
     nama: '',
     harga: '',
     satuan: 'kg' as 'kg' | 'pcs',
     kategori: 'kiloan' as 'kiloan' | 'satuan',
+    aktif: true
+  });
+
+  const [itemForm, setItemForm] = useState({
+    nama: '',
     aktif: true
   });
 
@@ -41,8 +52,26 @@ export default function AdminSettings() {
     }
   };
 
+  const fetchItems = async () => {
+    try {
+      setLoadingItems(true);
+      const { data, error } = await supabase
+        .from('service_items')
+        .select('*')
+        .order('nama', { ascending: true });
+
+      if (error) throw error;
+      setItems(data || []);
+    } catch (err: any) {
+      console.error('Error fetching items:', err);
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
   useEffect(() => {
     fetchServices();
+    fetchItems();
   }, []);
 
   const handleSave = async () => {
@@ -124,6 +153,48 @@ export default function AdminSettings() {
     setOpenOpenDialog(true);
   };
 
+  const handleSaveItem = async () => {
+    if (!itemForm.nama) {
+      toast.error('Mohon isi nama item');
+      return;
+    }
+
+    try {
+      if (editingItem) {
+        const { error } = await supabase
+          .from('service_items')
+          .update({ nama: itemForm.nama, aktif: itemForm.aktif })
+          .eq('id', editingItem.id);
+        if (error) throw error;
+        toast.success('Item berhasil diperbarui');
+      } else {
+        const { error } = await supabase
+          .from('service_items')
+          .insert([{ nama: itemForm.nama, aktif: true }]);
+        if (error) throw error;
+        toast.success('Item baru berhasil ditambahkan');
+      }
+      fetchItems();
+      setOpenItemDialog(false);
+      setItemForm({ nama: '', aktif: true });
+      setEditingItem(null);
+    } catch (err: any) {
+      toast.error('Gagal menyimpan item');
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    if (!confirm('Hapus item ini dari daftar standard?')) return;
+    try {
+      const { error } = await supabase.from('service_items').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Item berhasil dihapus');
+      fetchItems();
+    } catch (err: any) {
+      toast.error('Gagal menghapus item');
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Apakah Anda yakin ingin menghapus layanan ini?')) return;
 
@@ -153,8 +224,8 @@ export default function AdminSettings() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
-        <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Card className="lg:col-span-2 p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
           <div className="flex items-center gap-3 mb-8">
             <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
               <Tag className="h-5 w-5" />
@@ -169,7 +240,6 @@ export default function AdminSettings() {
                   <th className="text-left py-4 px-2">Nama Layanan</th>
                   <th className="text-left py-4 px-2">Kategori</th>
                   <th className="text-left py-4 px-2">Harga</th>
-                  <th className="text-left py-4 px-2">Satuan</th>
                   <th className="text-left py-4 px-2">Status</th>
                   <th className="text-right py-4 px-2">Aksi</th>
                 </tr>
@@ -177,14 +247,14 @@ export default function AdminSettings() {
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-20 text-center">
+                    <td colSpan={5} className="py-20 text-center">
                       <Loader2 className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-2" />
                       <p className="text-slate-400 font-bold text-sm">Memuat data layanan...</p>
                     </td>
                   </tr>
                 ) : services.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-20 text-center text-slate-400 font-medium">
+                    <td colSpan={5} className="py-20 text-center text-slate-400 font-medium">
                       Belum ada layanan yang terdaftar.
                     </td>
                   </tr>
@@ -197,8 +267,12 @@ export default function AdminSettings() {
                           {service.kategori}
                         </Badge>
                       </td>
-                      <td className="py-4 px-2 font-black text-slate-900">Rp {service.harga.toLocaleString('id-ID')}</td>
-                      <td className="py-4 px-2 text-slate-500 font-bold text-sm">per {service.satuan}</td>
+                      <td className="py-4 px-2">
+                        <div className="flex flex-col">
+                          <span className="font-black text-slate-900 text-sm">Rp {service.harga.toLocaleString('id-ID')}</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">per {service.satuan}</span>
+                        </div>
+                      </td>
                       <td className="py-4 px-2">
                         <Badge className={`rounded-lg px-3 py-1 font-black uppercase text-[10px] tracking-widest border-none ${service.aktif ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                           {service.aktif ? 'Aktif' : 'Nonaktif'}
@@ -220,6 +294,49 @@ export default function AdminSettings() {
               </tbody>
             </table>
           </div>
+        </Card>
+
+        <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
+                <Shirt className="h-5 w-5" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Standard Item</h3>
+            </div>
+            <Button size="sm" onClick={() => { setEditingItem(null); setItemForm({nama:'', aktif:true}); setOpenItemDialog(true); }} className="h-8 w-8 rounded-lg p-0 bg-blue-600">
+              <PlusCircle className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
+            {loadingItems ? (
+              <div className="py-10 text-center">
+                <Loader2 className="h-6 w-6 text-blue-600 animate-spin mx-auto mb-2" />
+                <p className="text-xs text-slate-400 font-bold">Memuat item...</p>
+              </div>
+            ) : items.length === 0 ? (
+              <p className="text-center text-slate-400 text-sm py-10">Belum ada item standard</p>
+            ) : items.map((item) => (
+              <div key={item.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 group">
+                <div className="flex items-center gap-3">
+                  <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${item.aktif ? 'bg-white text-blue-600' : 'bg-slate-200 text-slate-400'}`}>
+                    <Shirt className="h-4 w-4" />
+                  </div>
+                  <span className={`text-sm font-bold ${item.aktif ? 'text-slate-700' : 'text-slate-400 line-through'}`}>{item.nama}</span>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" onClick={() => { setEditingItem(item); setItemForm({nama:item.nama, aktif:item.aktif}); setOpenItemDialog(true); }} className="h-8 w-8 rounded-lg text-slate-400 hover:text-blue-600">
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(item.id)} className="h-8 w-8 rounded-lg text-slate-400 hover:text-red-600">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-6 text-[10px] text-slate-400 font-medium italic">* Item ini akan muncul sebagai tombol cepat di halaman order mitra.</p>
         </Card>
       </div>
 
@@ -293,6 +410,35 @@ export default function AdminSettings() {
             <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-widest text-xs px-8 h-12 shadow-lg shadow-blue-100">
               Simpan Layanan
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Item Standard */}
+      <Dialog open={openItemDialog} onOpenChange={setOpenItemDialog}>
+        <DialogContent className="sm:max-w-md rounded-3xl border-none shadow-2xl p-8">
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-2xl font-black text-slate-900">
+              {editingItem ? 'Edit Item Standard' : 'Tambah Item Standard'}
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium text-sm">
+              Item ini akan mempermudah mitra mencatat detail cucian satuan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nama Item</Label>
+              <Input value={itemForm.nama} onChange={(e) => setItemForm({...itemForm, nama: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm" placeholder="Contoh: Jas, Bedcover, dll" />
+            </div>
+            {editingItem && (
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="item-aktif" checked={itemForm.aktif} onChange={(e) => setItemForm({...itemForm, aktif: e.target.checked})} className="h-4 w-4 rounded border-slate-300" />
+                <Label htmlFor="item-aktif" className="text-sm font-bold text-slate-600">Aktifkan Item</Label>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-8">
+            <Button onClick={handleSaveItem} className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-black uppercase tracking-widest text-xs">Simpan Item</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

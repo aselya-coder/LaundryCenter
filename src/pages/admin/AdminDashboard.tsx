@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { StatusBadge } from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
 import { ORDER_STATUS_LABELS, Order } from '@/lib/types';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, BarChart, Bar } from 'recharts';
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -12,25 +12,29 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [mitraList, setMitraList] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [recentHistory, setRecentHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [ordersRes, mitraRes, expensesRes] = await Promise.all([
+        const [ordersRes, mitraRes, expensesRes, historyRes] = await Promise.all([
           supabase.from('orders').select('*'),
           supabase.from('mitra').select('*'),
-          supabase.from('expenses').select('*')
+          supabase.from('expenses').select('*'),
+          supabase.from('order_history').select('*, orders(customer_name, kode_order)').order('created_at', { ascending: false }).limit(6)
         ]);
 
         if (ordersRes.error) throw ordersRes.error;
         if (mitraRes.error) throw mitraRes.error;
         if (expensesRes.error) throw expensesRes.error;
+        if (historyRes.error) throw historyRes.error;
 
         setOrders(ordersRes.data || []);
         setMitraList(mitraRes.data || []);
         setExpenses(expensesRes.data || []);
+        setRecentHistory(historyRes.data || []);
       } catch (err) {
         console.error('Error fetching admin dashboard data:', err);
       } finally {
@@ -60,6 +64,18 @@ export default function AdminDashboard() {
 
   const cityChartData = useMemo(() => Object.entries(cityData).map(([kota, count]) => ({ name: String(kota), value: count as number })), [cityData]);
   const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#0ea5e9', '#6366f1'];
+
+  const mitraPerformanceData = useMemo(() => {
+    return mitraList.map(m => {
+      const mitraOrders = orders.filter(o => o.mitra_id === m.id);
+      const totalOmzet = mitraOrders.reduce((sum, o) => sum + o.total_price, 0);
+      return {
+        name: m.nama_toko,
+        orders: mitraOrders.length,
+        omzet: totalOmzet
+      };
+    }).sort((a, b) => b.omzet - a.omzet).slice(0, 5); // Top 5
+  }, [mitraList, orders]);
 
   const revenueData = useMemo(() => {
     // Generate data for last 7 days
@@ -212,41 +228,75 @@ export default function AdminDashboard() {
           </div>
         </Card>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-blue-600" />
+              Top 5 Performa Mitra (Omzet)
+            </h3>
+          </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={mitraPerformanceData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" hide />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  width={120}
+                  tick={{fill: '#475569', fontSize: 11, fontWeight: 700}} 
+                />
+                <Tooltip 
+                  cursor={{fill: '#f8fafc'}}
+                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}}
+                  formatter={(value: any) => [`Rp ${value.toLocaleString('id-ID')}`, 'Total Omzet']}
+                />
+                <Bar dataKey="omzet" fill="#2563eb" radius={[0, 12, 12, 0]} barSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
         <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
           <h3 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-2">
             <MapPin className="h-5 w-5 text-blue-600" />
-            Sebaran Mitra
+            Sebaran Mitra & Kepadatan
           </h3>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={cityChartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {cityChartData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="space-y-3 mt-4">
-            {cityChartData.map((entry, index) => (
-              <div key={entry.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full" style={{backgroundColor: COLORS[index % COLORS.length]}}></div>
-                  <span className="text-sm font-bold text-slate-600">{entry.name}</span>
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="h-[250px] w-full md:w-1/2">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={cityChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {cityChartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="w-full md:w-1/2 space-y-4">
+              {cityChartData.map((entry, index) => (
+                <div key={entry.name} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full" style={{backgroundColor: COLORS[index % COLORS.length]}}></div>
+                    <span className="text-xs font-black text-slate-600 uppercase tracking-widest">{entry.name}</span>
+                  </div>
+                  <span className="text-sm font-black text-slate-900">{entry.value} Mitra</span>
                 </div>
-                <span className="text-sm font-black text-slate-900">{entry.value} Mitra</span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </Card>
       </div>
@@ -256,24 +306,29 @@ export default function AdminDashboard() {
           <Activity className="h-5 w-5 text-blue-600" />
           Log Aktivitas Terkini
         </h3>
-        <div className="space-y-4">
-          {orders.slice(0, 5).map((order) => (
-            <div key={order.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                  <Package className="h-5 w-5 text-blue-600" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {recentHistory.map((history) => (
+            <div key={history.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 group hover:border-blue-200 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <Package className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-900">Update Status: {ORDER_STATUS_LABELS[order.status]}</p>
-                  <p className="text-xs text-slate-500 font-medium">Customer: {order.customer_name} • ID: #{order.id.slice(0, 8)}</p>
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">#{history.orders?.kode_order || 'N/A'}</p>
+                  <p className="text-xs font-bold text-slate-900 truncate max-w-[120px]">{history.orders?.customer_name || 'Customer'}</p>
                 </div>
               </div>
               <div className="text-right">
-                <StatusBadge status={order.status} className="mb-1" />
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{new Date(order.updated_at).toLocaleTimeString('id-ID')}</p>
+                <StatusBadge status={history.status} className="scale-75 origin-right mb-1" />
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{new Date(history.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
               </div>
             </div>
           ))}
+          {recentHistory.length === 0 && (
+            <div className="col-span-full py-10 text-center text-slate-400 font-bold text-sm">
+              Belum ada aktivitas tercatat
+            </div>
+          )}
         </div>
       </Card>
     </div>

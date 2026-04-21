@@ -193,7 +193,7 @@ export default function MitraDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         <Card className="p-6 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border-none group">
           <div className="h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
             <Package className="h-6 w-6" />
@@ -215,16 +215,24 @@ export default function MitraDashboard() {
             <DollarSign className="h-6 w-6" />
           </div>
           <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1">Total Transaksi</p>
-          <h3 className="text-2xl font-black text-slate-900">Rp {totalPendapatan.toLocaleString('id-ID')}</h3>
+          <h3 className="text-xl font-black text-slate-900">Rp {totalPendapatan.toLocaleString('id-ID')}</h3>
+        </Card>
+
+        <Card className="p-6 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border-none group">
+          <div className="h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+            <Wallet className="h-6 w-6" />
+          </div>
+          <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1">Saldo Deposit</p>
+          <h3 className="text-xl font-black text-blue-600">Rp {(mitra.saldo || 0).toLocaleString('id-ID')}</h3>
         </Card>
 
         <Card className="p-6 bg-blue-600 rounded-3xl shadow-xl shadow-blue-200 border-none text-white relative overflow-hidden">
           <div className="relative z-10">
             <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center text-white mb-4 backdrop-blur-md">
-              <Wallet className="h-6 w-6" />
+              <DollarSign className="h-6 w-6" />
             </div>
-            <p className="text-blue-100 text-xs font-black uppercase tracking-widest mb-1">Komisi Anda ({mitra.komisi}%)</p>
-            <h3 className="text-2xl font-black">Rp {totalKomisi.toLocaleString('id-ID')}</h3>
+            <p className="text-blue-100 text-xs font-black uppercase tracking-widest mb-1">Komisi ({mitra.komisi}%)</p>
+            <h3 className="text-xl font-black">Rp {totalKomisi.toLocaleString('id-ID')}</h3>
           </div>
           <div className="absolute -right-4 -bottom-4 opacity-10">
             <Wallet className="h-24 w-24" />

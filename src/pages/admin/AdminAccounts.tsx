@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { User } from '@/lib/types';
-import { Search, User as UserIcon, Mail, Shield, ShieldCheck, Loader2, PlusCircle, Edit2, Trash2 } from 'lucide-react';
+import { Search, User as UserIcon, Mail, Shield, ShieldCheck, Loader2, PlusCircle, Edit2, Trash2, ExternalLink, Copy, Check, WashingMachine } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
@@ -16,12 +16,20 @@ export default function AdminAccounts() {
   const [searchTerm, setSearchTerm] = useState('');
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [form, setForm] = useState({
     id: '',
     nama: '',
     email: '',
-    role: 'mitra' as 'admin' | 'mitra'
+    role: 'mitra' as 'admin' | 'mitra' | 'staff'
   });
+
+  const copyToClipboard = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    toast.success('ID disalin ke clipboard');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const fetchUsers = async () => {
     try {
@@ -46,6 +54,11 @@ export default function AdminAccounts() {
   }, []);
 
   const handleSave = async () => {
+    if (!form.nama || !form.email || (!editingUser && !form.id)) {
+      toast.error('Mohon lengkapi semua data, termasuk User ID untuk akun baru');
+      return;
+    }
+
     try {
       if (editingUser) {
         const { error } = await supabase
@@ -147,15 +160,29 @@ export default function AdminAccounts() {
               <DialogTitle className="text-2xl font-black text-slate-900">
                 {editingUser ? 'Edit Profil Akun' : 'Tambah Profil Akun'}
               </DialogTitle>
-              <DialogDescription className="text-slate-500 font-medium text-sm">
-                {editingUser ? 'Perbarui informasi profil pengguna' : 'Buat profil baru untuk email yang sudah terdaftar di Supabase Auth'}
+              <DialogDescription className="text-slate-500 font-medium text-sm space-y-4">
+                <p>Silakan buat akun di <strong>Supabase Auth</strong> terlebih dahulu, lalu salin <strong>User ID (UUID)</strong> ke form di bawah ini.</p>
+                <a 
+                  href="https://supabase.com/dashboard/project/_/auth/users" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-bold bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Buka Supabase Auth
+                  <ExternalLink className="h-4 w-4" />
+                </a>
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">User ID (UUID dari Supabase Auth)</Label>
-                <Input value={form.id} onChange={(e) => setForm({...form, id: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm" placeholder="Contoh: 1a2b3c4d-..." />
-                <p className="text-[10px] text-slate-400 font-medium px-1">Opsional: Isi jika ingin sinkronisasi manual dengan Auth</p>
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">User ID (UUID)</Label>
+                <Input 
+                  value={form.id} 
+                  onChange={(e) => setForm({...form, id: e.target.value})} 
+                  className={`h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm ${!form.id && !editingUser ? 'ring-2 ring-orange-200' : ''}`}
+                  placeholder="Contoh: 1a2b3c4d-..." 
+                />
+                {!form.id && !editingUser && <p className="text-[10px] text-orange-500 font-black uppercase tracking-wider px-1">Wajib diisi untuk akun baru</p>}
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Nama Lengkap</Label>
@@ -173,6 +200,7 @@ export default function AdminAccounts() {
                   className="w-full h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm px-4 focus:ring-2 focus:ring-blue-500 outline-none"
                 >
                   <option value="mitra">Mitra</option>
+                  <option value="staff">Staff Produksi</option>
                   <option value="admin">Administrator</option>
                 </select>
               </div>
@@ -204,12 +232,14 @@ export default function AdminAccounts() {
                 <div className={`h-14 w-14 rounded-2xl flex items-center justify-center transition-colors duration-300 ${
                   user.role === 'admin' 
                   ? 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white' 
+                  : user.role === 'staff'
+                  ? 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'
                   : 'bg-slate-50 text-slate-600 group-hover:bg-slate-600 group-hover:text-white'
                 }`}>
-                  {user.role === 'admin' ? <ShieldCheck className="h-7 w-7" /> : <UserIcon className="h-7 w-7" />}
+                  {user.role === 'admin' ? <ShieldCheck className="h-7 w-7" /> : user.role === 'staff' ? <WashingMachine className="h-7 w-7" /> : <UserIcon className="h-7 w-7" />}
                 </div>
                 <Badge className={`rounded-lg px-3 py-1 font-black uppercase text-[10px] tracking-widest border-none ${
-                  user.role === 'admin' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-600'
+                  user.role === 'admin' ? 'bg-blue-50 text-blue-600' : user.role === 'staff' ? 'bg-orange-50 text-orange-600' : 'bg-slate-100 text-slate-600'
                 }`}>
                   {user.role}
                 </Badge>
@@ -226,7 +256,13 @@ export default function AdminAccounts() {
                   <Shield className="h-4 w-4 text-blue-600" />
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">ID Akun</span>
                 </div>
-                <span className="text-[10px] font-mono font-bold text-slate-400">#{user.id.slice(0, 8)}</span>
+                <button 
+                  onClick={() => copyToClipboard(user.id)}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-white transition-colors group/copy"
+                >
+                  <span className="text-[10px] font-mono font-bold text-slate-400 group-hover/copy:text-blue-600">#{user.id.slice(0, 8)}</span>
+                  {copiedId === user.id ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-slate-300 group-hover/copy:text-blue-400" />}
+                </button>
               </div>
             </div>
             

@@ -9,6 +9,7 @@ import { ArrowLeft, User, Phone, MapPin, Calendar, Tag, Weight, ReceiptText, Clo
 import { Separator } from '@/components/ui/separator';
 import { useReactToPrint } from 'react-to-print';
 import { ThermalReceipt } from '@/components/order/ThermalReceipt';
+import { whatsappHelper } from '@/lib/whatsapp';
 
 export default function OrderDetailPage() {
   const { orderId: id } = useParams<{ orderId: string }>();
@@ -22,20 +23,7 @@ export default function OrderDetailPage() {
 
   const handleWhatsAppNotify = () => {
     if (!order) return;
-    
-    const trackingUrl = `${window.location.origin}/tracking?code=${order.kode_order}`;
-    let message = '';
-    
-    if (order.status === 'siap_diambil') {
-      message = `Halo ${order.customer_name}, laundry Anda dengan kode *#${order.kode_order}* sudah *SIAP DIAMBIL* di ${order.mitra?.nama_toko || 'outlet kami'}.\n\nTotal Biaya: Rp ${order.total_price.toLocaleString('id-ID')}\nStatus Bayar: ${order.is_paid ? 'LUNAS' : 'BELUM BAYAR'}\n\nLacak detailnya di sini: ${trackingUrl}\n\nTerima kasih!`;
-    } else {
-      message = `Halo ${order.customer_name}, laundry Anda dengan kode *#${order.kode_order}* saat ini berstatus: *${ORDER_STATUS_LABELS[order.status]}*.\n\nLacak status terbaru di sini: ${trackingUrl}\n\nTerima kasih!`;
-    }
-
-    const phone = order.customer_hp?.replace(/\D/g, '');
-    const cleanPhone = phone?.startsWith('0') ? '62' + phone.slice(1) : phone;
-    
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+    whatsappHelper.send(order);
   };
 
   const fetchOrder = async () => {
@@ -236,28 +224,29 @@ export default function OrderDetailPage() {
               Riwayat Perjalanan Cucian
             </h3>
             
-            <div className="space-y-8 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+            <div className="space-y-0 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
               {order.order_history && order.order_history.length > 0 ? (
                 order.order_history.map((history, idx) => (
-                  <div key={history.id} className="relative pl-12">
-                    <div className={`absolute left-0 top-1 h-8 w-8 rounded-full border-4 border-white shadow-sm flex items-center justify-center z-10 ${idx === 0 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
-                      {idx === 0 ? <CheckCircle2 className="h-4 w-4" /> : <div className="h-2 w-2 rounded-full bg-current" />}
+                  <div key={history.id} className={`relative pl-12 pb-8 ${idx === order.order_history!.length - 1 ? 'pb-0' : ''}`}>
+                    <div className={`absolute left-0 top-1 h-8 w-8 rounded-full border-4 border-white shadow-sm flex items-center justify-center z-10 transition-transform duration-300 hover:scale-110 ${idx === 0 ? 'bg-blue-600 text-white ring-4 ring-blue-50' : 'bg-white text-slate-300 border-slate-100'}`}>
+                      {idx === 0 ? <CheckCircle2 className="h-4 w-4" /> : <Clock className="h-3 w-3" />}
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <p className={`text-sm font-black uppercase tracking-widest ${idx === 0 ? 'text-blue-600' : 'text-slate-900'}`}>
+                    <div className={`p-5 rounded-[1.5rem] border transition-all duration-300 ${idx === 0 ? 'bg-blue-50/50 border-blue-100 shadow-sm' : 'bg-slate-50/30 border-slate-50'}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                        <p className={`text-sm font-black uppercase tracking-widest ${idx === 0 ? 'text-blue-600' : 'text-slate-500'}`}>
                           {ORDER_STATUS_LABELS[history.status]}
                         </p>
-                        <p className="text-xs font-bold text-slate-400 mt-0.5">{history.catatan}</p>
-                      </div>
-                      <div className="text-left sm:text-right shrink-0">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <Calendar className="h-3 w-3" />
                           {new Date(history.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                        </p>
-                        <p className="text-sm font-black text-slate-900">
+                          <span className="text-slate-200">|</span>
+                          <Clock className="h-3 w-3" />
                           {new Date(history.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
+                        </div>
                       </div>
+                      <p className={`text-xs font-bold leading-relaxed ${idx === 0 ? 'text-blue-700/70' : 'text-slate-400'}`}>
+                        {history.catatan || 'Status diperbarui'}
+                      </p>
                     </div>
                   </div>
                 ))

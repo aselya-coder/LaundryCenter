@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'mitra';
+export type UserRole = 'admin' | 'mitra' | 'staff';
 
 export type OrderStatus =
   | 'diterima_mitra'
@@ -66,11 +66,21 @@ export interface Mitra {
   alamat: string;
   kota: string;
   komisi: number;
+  saldo: number;
   aktif: boolean;
   user?: {
     nama: string;
     email?: string;
   };
+}
+
+export interface MitraTransaction {
+  id: string;
+  mitra_id: string;
+  jumlah: number;
+  tipe: 'topup' | 'potong' | 'penyesuaian';
+  keterangan: string;
+  created_at: string;
 }
 
 export interface Order {
@@ -111,4 +121,29 @@ export interface OrderHistory {
   status: OrderStatus;
   catatan: string | null;
   created_at: string;
+}
+
+export interface Inventory {
+  id: string;
+  nama: string;
+  stok: number;
+  satuan: string;
+  min_stok: number;
+  kategori: string;
+  updated_at: string;
+}
+
+export interface StockLog {
+  id: string;
+  inventory_id: string;
+  jumlah: number;
+  tipe: 'masuk' | 'keluar';
+  keterangan: string;
+  created_at: string;
+}
+
+export interface ServiceItem {
+  id: string;
+  nama: string;
+  aktif: boolean;
 }

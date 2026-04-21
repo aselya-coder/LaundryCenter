@@ -19,6 +19,7 @@ export default function AdminReports() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [selectedMitraId, setSelectedMitraId] = useState<string>('all');
   
   // State untuk filter tanggal
   const [dateRange, setDateRange] = useState<{
@@ -93,18 +94,26 @@ export default function AdminReports() {
     }
   }, [orders]);
 
-  // Filter order berdasarkan rentang tanggal
+  // Filter order berdasarkan rentang tanggal dan mitra
   const filteredByDate = useMemo(() => {
-    if (!dateRange.from || !dateRange.to) return orders;
+    let result = orders;
     
-    return orders.filter(o => {
-      const orderDate = new Date(o.tanggal_masuk);
-      return isWithinInterval(orderDate, {
-        start: startOfDay(dateRange.from!),
-        end: endOfDay(dateRange.to!)
+    if (dateRange.from && dateRange.to) {
+      result = result.filter(o => {
+        const orderDate = new Date(o.tanggal_masuk);
+        return isWithinInterval(orderDate, {
+          start: startOfDay(dateRange.from!),
+          end: endOfDay(dateRange.to!)
+        });
       });
-    });
-  }, [orders, dateRange]);
+    }
+
+    if (selectedMitraId !== 'all') {
+      result = result.filter(o => o.mitra_id === selectedMitraId);
+    }
+    
+    return result;
+  }, [orders, dateRange, selectedMitraId]);
 
   // Logika Keuangan - Memastikan order selesai dianggap lunas untuk laporan
   const totalOmzetBruto = useMemo(() => filteredByDate.reduce((sum, o) => sum + o.total_price, 0), [filteredByDate]);
@@ -380,6 +389,16 @@ export default function AdminReports() {
           <p className="text-slate-500 font-medium">Analisis pendapatan, komisi mitra, dan performa bisnis</p>
         </div>
         <div className="flex items-center gap-3">
+          <select 
+            value={selectedMitraId} 
+            onChange={(e) => setSelectedMitraId(e.target.value)}
+            className="h-12 px-4 rounded-2xl border border-slate-200 bg-white font-bold text-sm text-slate-600 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
+          >
+            <option value="all">Semua Mitra</option>
+            {mitraList.map(m => (
+              <option key={m.id} value={m.id}>{m.nama_toko}</option>
+            ))}
+          </select>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="h-12 px-6 rounded-2xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 gap-2">
@@ -580,6 +599,7 @@ export default function AdminReports() {
                 <th className="text-left py-4 px-2">Total Omzet</th>
                 <th className="text-left py-4 px-2">Komisi (Payout)</th>
                 <th className="text-left py-4 px-2">Pendapatan Bersih</th>
+                <th className="text-right py-4 px-2">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -595,8 +615,23 @@ export default function AdminReports() {
                   </td>
                   <td className="py-4 px-2 text-sm font-bold text-slate-600">{m.orders}</td>
                   <td className="py-4 px-2 text-sm font-black text-slate-900">Rp {m.total.toLocaleString('id-ID')}</td>
-                  <td className="py-4 px-2 text-sm font-bold text-orange-600">Rp {m.komisi.toLocaleString('id-ID')}</td>
+                  <td className="py-4 px-2 text-sm font-bold text-orange-600">
+                    <div className="flex flex-col">
+                      <span>Rp {m.komisi.toLocaleString('id-ID')}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Belum Dibayar</span>
+                    </div>
+                  </td>
                   <td className="py-4 px-2 text-sm font-black text-blue-600">Rp {m.bersih.toLocaleString('id-ID')}</td>
+                  <td className="py-4 px-2 text-right">
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => toast.info(`Fitur Settlement Komisi untuk ${m.nama} akan segera hadir!`)}
+                      className="h-9 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                    >
+                      Selesaikan
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>

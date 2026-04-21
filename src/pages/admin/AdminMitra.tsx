@@ -16,7 +16,9 @@ import {
   Power, 
   Store, 
   Loader2, 
-  Mail 
+  Mail,
+  Wallet,
+  ArrowUpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,7 +28,11 @@ export default function AdminMitra() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [open, setOpen] = useState(false);
+  const [openTopup, setOpenTopup] = useState(false);
   const [editingMitra, setEditingMitra] = useState<Mitra | null>(null);
+  const [selectedMitra, setSelectedMitra] = useState<Mitra | null>(null);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupNote, setTopupNote] = useState('');
   const [form, setForm] = useState({ 
     nama_toko: '', 
     alamat: '', 
@@ -202,6 +208,44 @@ export default function AdminMitra() {
     setOpen(true);
   };
 
+  const handleTopup = async () => {
+    if (!selectedMitra || !topupAmount) return;
+
+    try {
+      const amount = Number(topupAmount);
+      const newSaldo = (selectedMitra.saldo || 0) + amount;
+
+      // 1. Update saldo di tabel mitra
+      const { error: mitraError } = await supabase
+        .from('mitra')
+        .update({ saldo: newSaldo })
+        .eq('id', selectedMitra.id);
+
+      if (mitraError) throw mitraError;
+
+      // 2. Catat transaksi
+      const { error: transError } = await supabase
+        .from('mitra_transactions')
+        .insert([{
+          mitra_id: selectedMitra.id,
+          jumlah: amount,
+          tipe: 'topup',
+          keterangan: topupNote || 'Top up saldo oleh Admin'
+        }]);
+
+      if (transError) throw transError;
+
+      toast.success(`Saldo ${selectedMitra.nama_toko} berhasil ditambah Rp ${amount.toLocaleString('id-ID')}`);
+      setOpenTopup(false);
+      setTopupAmount('');
+      setTopupNote('');
+      fetchMitra();
+    } catch (err: any) {
+      console.error('Error topup:', err);
+      toast.error(err.message || 'Gagal melakukan top up');
+    }
+  };
+
   const toggleActive = async (mitra: Mitra) => {
     try {
       const { error } = await supabase
@@ -372,12 +416,27 @@ export default function AdminMitra() {
                   </div>
                 )}
               </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Percent className="h-4 w-4 text-blue-600" />
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Komisi</span>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5 text-blue-600">
+                    <Percent className="h-3 w-3" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Komisi</span>
+                  </div>
+                  <span className="text-lg font-black text-slate-900">{mitra.komisi}%</span>
                 </div>
-                <span className="text-lg font-black text-blue-600">{mitra.komisi}%</span>
+                <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex flex-col gap-1 group/saldo relative overflow-hidden">
+                  <div className="flex items-center gap-1.5 text-blue-600">
+                    <Wallet className="h-3 w-3" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Saldo</span>
+                  </div>
+                  <span className="text-lg font-black text-blue-700">Rp {(mitra.saldo || 0).toLocaleString('id-ID')}</span>
+                  <button 
+                    onClick={() => { setSelectedMitra(mitra); setOpenTopup(true); }}
+                    className="absolute right-2 top-2 h-6 w-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-200 opacity-0 group-hover/saldo:opacity-100 transition-opacity"
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="p-4 bg-slate-50/50 flex gap-2">
@@ -393,6 +452,46 @@ export default function AdminMitra() {
           </Card>
         ))}
       </div>
+      {/* Dialog Top Up Saldo */}
+      <Dialog open={openTopup} onOpenChange={setOpenTopup}>
+        <DialogContent className="sm:max-w-md rounded-3xl border-none shadow-2xl p-8">
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-2xl font-black text-slate-900 flex items-center gap-2">
+              <ArrowUpCircle className="h-6 w-6 text-blue-600" />
+              Top Up Saldo Mitra
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium text-sm">
+              Tambahkan saldo untuk <strong>{selectedMitra?.nama_toko}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Jumlah Top Up (Rp)</Label>
+              <Input 
+                type="number" 
+                value={topupAmount} 
+                onChange={(e) => setTopupAmount(e.target.value)} 
+                className="h-12 rounded-xl bg-slate-50 border-none font-black text-lg shadow-sm" 
+                placeholder="0" 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Keterangan</Label>
+              <Input 
+                value={topupNote} 
+                onChange={(e) => setTopupNote(e.target.value)} 
+                className="h-12 rounded-xl bg-slate-50 border-none font-bold shadow-sm" 
+                placeholder="Contoh: Deposit Tunai / Transfer" 
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-8">
+            <Button onClick={handleTopup} className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 font-black uppercase tracking-widest text-xs">
+              Konfirmasi Top Up
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
