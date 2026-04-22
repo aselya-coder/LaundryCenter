@@ -24,8 +24,8 @@
     --muted: 210 20% 96%;
     --muted-foreground: 215 14% 50%;
 
-    --accent: 210 40% 94%;
-    --accent-foreground: 217 91% 50%;
+    --accent: 210 60% 90%;
+    --accent-foreground: 217 91% 55%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
@@ -40,8 +40,28 @@
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
-    --info: 199 89% 48%;
+    --info: 199 89% 50%;
     --info-foreground: 0 0% 100%;
+
+    --pink: 330 75% 55%;
+    --pink-foreground: 0 0% 100%;
+    --purple: 270 65% 50%;
+    --purple-foreground: 0 0% 100%;
+    --cyan: 185 75% 40%;
+    --cyan-foreground: 0 0% 100%;
+    --teal: 175 65% 38%;
+    --teal-foreground: 0 0% 100%;
+
+    --navy: 225 45% 35%;
+    --navy-foreground: 0 0% 100%;
+    --maroon: 345 40% 45%;
+    --maroon-foreground: 0 0% 100%;
+    --olive: 80 30% 45%;
+    --olive-foreground: 0 0% 100%;
+    --khaki: 45 40% 70%;
+    --khaki-foreground: 215 25% 15%;
+    --charcoal: 220 10% 45%;
+    --charcoal-foreground: 0 0% 100%;
 
     --sidebar-background: 215 25% 15%;
     --sidebar-foreground: 210 20% 85%;
@@ -66,13 +86,27 @@
     --secondary-foreground: 210 20% 85%;
     --muted: 215 25% 16%;
     --muted-foreground: 215 14% 55%;
-    --accent: 215 25% 20%;
-    --accent-foreground: 217 91% 60%;
+    --accent: 215 35% 28%;
+    --accent-foreground: 217 91% 65%;
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 100%;
     --border: 215 20% 20%;
     --input: 215 20% 20%;
     --ring: 217 91% 60%;
+    --teal: 175 60% 32%;
+    --teal-foreground: 0 0% 100%;
+
+    --navy: 225 55% 35%;
+    --navy-foreground: 0 0% 100%;
+    --maroon: 345 50% 40%;
+    --maroon-foreground: 0 0% 100%;
+    --olive: 80 35% 40%;
+    --olive-foreground: 0 0% 100%;
+    --khaki: 45 50% 55%;
+    --khaki-foreground: 215 25% 10%;
+    --charcoal: 220 12% 40%;
+    --charcoal-foreground: 0 0% 100%;
+
     --sidebar-background: 215 25% 7%;
     --sidebar-foreground: 210 20% 85%;
     --sidebar-primary: 217 91% 60%;

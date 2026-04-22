@@ -62,6 +62,42 @@ export default {
           DEFAULT: "hsl(var(--info))",
           foreground: "hsl(var(--info-foreground))",
         },
+        pink: {
+          DEFAULT: "hsl(var(--pink))",
+          foreground: "hsl(var(--pink-foreground))",
+        },
+        purple: {
+          DEFAULT: "hsl(var(--purple))",
+          foreground: "hsl(var(--purple-foreground))",
+        },
+        cyan: {
+          DEFAULT: "hsl(var(--cyan))",
+          foreground: "hsl(var(--cyan-foreground))",
+        },
+        teal: {
+          DEFAULT: "hsl(var(--teal))",
+          foreground: "hsl(var(--teal-foreground))",
+        },
+        navy: {
+          DEFAULT: "hsl(var(--navy))",
+          foreground: "hsl(var(--navy-foreground))",
+        },
+        maroon: {
+          DEFAULT: "hsl(var(--maroon))",
+          foreground: "hsl(var(--maroon-foreground))",
+        },
+        olive: {
+          DEFAULT: "hsl(var(--olive))",
+          foreground: "hsl(var(--olive-foreground))",
+        },
+        khaki: {
+          DEFAULT: "hsl(var(--khaki))",
+          foreground: "hsl(var(--khaki-foreground))",
+        },
+        charcoal: {
+          DEFAULT: "hsl(var(--charcoal))",
+          foreground: "hsl(var(--charcoal-foreground))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
