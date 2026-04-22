@@ -7,14 +7,17 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { Service, ServiceItem } from '@/lib/types';
 import { toast } from 'sonner';
-import { PlusCircle, Edit2, Trash2, Save, X, Loader2, Tag, DollarSign, Package, Shirt } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, Save, X, Loader2, Tag, DollarSign, Package, Shirt, Phone, AppWindow } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export default function AdminSettings() {
   const [services, setServices] = useState<Service[]>([]);
   const [items, setItems] = useState<ServiceItem[]>([]);
+  const [adminPhone, setAdminPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingItems, setLoadingItems] = useState(true);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [openDialog, setOpenOpenDialog] = useState(false);
   const [openItemDialog, setOpenItemDialog] = useState(false);
   
@@ -69,10 +72,46 @@ export default function AdminSettings() {
     }
   };
 
+  const fetchSettings = async () => {
+    try {
+      setLoadingSettings(true);
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('key', 'admin_phone')
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) setAdminPhone(data.value);
+    } catch (err: any) {
+      console.error('Error fetching settings:', err);
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
   useEffect(() => {
     fetchServices();
     fetchItems();
+    fetchSettings();
   }, []);
+
+  const handleSaveSettings = async () => {
+    try {
+      setSavingSettings(true);
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'admin_phone', value: adminPhone }, { onConflict: 'key' });
+
+      if (error) throw error;
+      toast.success('Nomor WhatsApp Admin berhasil diperbarui');
+    } catch (err: any) {
+      console.error('Error saving settings:', err);
+      toast.error('Gagal memperbarui nomor admin');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!form.nama || !form.harga) {
@@ -225,6 +264,41 @@ export default function AdminSettings() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Card className="p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+              <AppWindow className="h-5 w-5" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">Konfigurasi Aplikasi</h3>
+          </div>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Nomor WhatsApp Admin (Pusat)</Label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Input 
+                  value={adminPhone} 
+                  onChange={(e) => setAdminPhone(e.target.value)}
+                  className="pl-12 h-14 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-blue-500 font-semibold transition-all shadow-sm"
+                  placeholder="628123456789"
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium ml-1 italic">
+                * Gunakan kode negara (misal: 628...). Nomor ini akan digunakan untuk semua tombol "Hubungi Admin".
+              </p>
+            </div>
+
+            <Button 
+              onClick={handleSaveSettings}
+              disabled={savingSettings || loadingSettings}
+              className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-slate-200"
+            >
+              {savingSettings ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Simpan Perubahan'}
+            </Button>
+          </div>
+        </Card>
+
         <Card className="lg:col-span-2 p-8 border-none shadow-xl shadow-slate-200/50 bg-white rounded-3xl">
           <div className="flex items-center gap-3 mb-8">
             <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">

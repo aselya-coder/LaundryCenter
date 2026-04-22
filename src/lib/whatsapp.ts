@@ -50,5 +50,28 @@ export const whatsappHelper = {
     const message = whatsappHelper.generateMessage(order);
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
+  },
+
+  /**
+   * Buka link WhatsApp untuk hubungi admin pusat
+   */
+  contactAdmin: async (storeName: string) => {
+    try {
+      const { supabase } = await import('./supabase');
+      const { data } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'admin_phone')
+        .single();
+      
+      const adminPhone = data?.value || '6281234567890'; // Fallback
+      const message = `Halo Admin Pusat, saya dari mitra ${storeName} ingin bertanya mengenai...`;
+      const url = `https://wa.me/${whatsappHelper.formatPhone(adminPhone)}?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank');
+    } catch (err) {
+      console.error('Error contacting admin:', err);
+      // Fallback if everything fails
+      window.open(`https://wa.me/6281234567890?text=Halo Admin Pusat...`, '_blank');
+    }
   }
 };

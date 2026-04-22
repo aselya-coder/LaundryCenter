@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { toast } from 'sonner';
+import { whatsappHelper } from '@/lib/whatsapp';
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -325,10 +326,7 @@ export default function MitraDashboard() {
               <h3 className="text-lg font-bold mb-2">Butuh Bantuan?</h3>
               <p className="text-slate-400 text-xs mb-6 leading-relaxed">Hubungi admin pusat jika Anda mengalami kendala operasional atau teknis.</p>
               <Button 
-                onClick={() => {
-                  const message = `Halo Admin Pusat, saya dari mitra ${mitra.nama_toko} ingin bertanya mengenai...`;
-                  window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(message)}`, '_blank');
-                }}
+                onClick={() => whatsappHelper.contactAdmin(mitra.nama_toko)}
                 className="w-full bg-white text-slate-900 hover:bg-slate-100 font-black text-xs h-10 rounded-xl uppercase tracking-widest"
               >
                 Hubungi Admin
