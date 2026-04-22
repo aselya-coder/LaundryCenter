@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabase';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW, Order } from '@/lib/types';
-import { QrCode, Search, WashingMachine, CheckCircle2, Clock, Loader2, History, XCircle } from 'lucide-react';
+import { QrCode, Search, WashingMachine, CheckCircle2, Clock, Loader2, History, XCircle, Shirt, Waves, Sparkles, Wind, Droplets, UtensilsCrossed } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -119,8 +119,90 @@ export default function TrackingPage() {
   const qrCodeUrl = trackingUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(trackingUrl)}` : '';
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-border/50 bg-white sticky top-0 z-10">
+    <div className="min-h-screen bg-slate-50 relative overflow-hidden">
+      {/* Hiasan Latar Belakang - Grid & Blobs (Full Screen) */}
+      <div className="fixed inset-0 -z-0 pointer-events-none">
+        {/* Subtle Grid Pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f1f5f9_2px,transparent_2px),linear-gradient(to_bottom,#f1f5f9_2px,transparent_2px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+        
+        {/* Animated Blobs */}
+        <div className="absolute -top-[10%] -left-[10%] w-[50%] h-[50%] bg-blue-100 rounded-full blur-[120px] opacity-50 animate-pulse"></div>
+        <div className="absolute top-[20%] -right-[10%] w-[45%] h-[45%] bg-pink-100 rounded-full blur-[120px] opacity-40 animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute -bottom-[10%] left-[20%] w-[40%] h-[40%] bg-sky-100 rounded-full blur-[100px] opacity-40 animate-pulse" style={{ animationDelay: '4s' }}></div>
+
+        {/* Floating Decorative Icons & Laundry Themes */}
+        <motion.div 
+          animate={{ y: [0, -20, 0], rotate: [0, 10, 0] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-32 left-[10%] text-blue-500 opacity-60 pointer-events-none"
+        >
+          <Shirt size={60} className="drop-shadow-lg" />
+        </motion.div>
+
+        <motion.div 
+          animate={{ y: [0, 20, 0], rotate: [0, -10, 0] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute bottom-32 right-[10%] text-pink-500 opacity-60 pointer-events-none"
+        >
+          <Shirt size={50} className="drop-shadow-lg" />
+        </motion.div>
+
+        {/* Aksen Baru: Angin/Parfum */}
+        <motion.div 
+          animate={{ x: [-10, 10, -10], opacity: [0.4, 0.7, 0.4] }}
+          transition={{ duration: 4, repeat: Infinity }}
+          className="absolute top-[45%] left-[5%] text-teal-400 pointer-events-none"
+        >
+          <Wind size={35} className="drop-shadow-md" />
+          <span className="text-[8px] font-bold uppercase tracking-widest block text-center mt-1">Fresh</span>
+        </motion.div>
+
+        {/* Aksen Baru: Tetesan Pewangi */}
+        <motion.div 
+          animate={{ y: [-20, 20, -20], scale: [1, 1.2, 1] }}
+          transition={{ duration: 5, repeat: Infinity }}
+          className="absolute top-[20%] left-[25%] text-purple-400 pointer-events-none"
+        >
+          <Droplets size={30} className="drop-shadow-md" />
+        </motion.div>
+
+        {/* Aksen Baru: Mesin Cuci Kecil */}
+        <motion.div 
+          animate={{ rotate: [-5, 5, -5] }}
+          transition={{ duration: 3, repeat: Infinity }}
+          className="absolute bottom-[25%] left-[15%] text-orange-400 opacity-60 pointer-events-none"
+        >
+          <WashingMachine size={45} className="drop-shadow-md" />
+        </motion.div>
+
+        <motion.div 
+          animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.8, 0.5] }}
+          transition={{ duration: 3, repeat: Infinity }}
+          className="absolute top-[25%] right-[15%] text-yellow-500 pointer-events-none"
+        >
+          <Sparkles size={40} className="drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]" />
+        </motion.div>
+
+        <motion.div 
+          animate={{ x: [-20, 20, -20] }}
+          transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-10 left-[5%] text-blue-400 opacity-40 pointer-events-none"
+        >
+          <Waves size={100} className="drop-shadow-lg" />
+        </motion.div>
+
+        <motion.div 
+          animate={{ y: [0, -20, 0], scale: [1, 1.1, 1] }}
+          transition={{ duration: 5, repeat: Infinity }}
+          className="absolute top-[15%] right-[25%] text-sky-400 opacity-70 pointer-events-none"
+        >
+          <div className="w-8 h-8 rounded-full border-[3px] border-current flex items-center justify-center bg-white/40 backdrop-blur-md shadow-lg">
+            <div className="w-4 h-4 rounded-full border-2 border-current opacity-40"></div>
+          </div>
+        </motion.div>
+      </div>
+
+      <header className="border-b border-border/50 bg-white/80 backdrop-blur-md sticky top-0 z-50">
         <div className="w-full px-8 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-blue-600">
             <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200">
@@ -128,14 +210,32 @@ export default function TrackingPage() {
             </div>
             <span className="font-bold text-xl tracking-tight text-slate-900">LaundryCenter</span>
           </Link>
-          <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors bg-slate-100 px-4 py-2 rounded-full">Login</Link>
+          <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors bg-white/50 px-4 py-2 rounded-full border border-slate-200 shadow-sm">Login</Link>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
-          <h1 className="text-4xl font-extrabold text-slate-900 mb-4">Lacak Laundry Anda</h1>
-          <p className="text-slate-600 text-lg">Pantau status cucian Anda secara real-time dari mana saja</p>
+      <div className="max-w-4xl mx-auto px-4 py-16 relative z-10">
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          className="text-center mb-12"
+        >
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-xs font-black uppercase tracking-widest mb-6 shadow-sm">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+            </span>
+            Real-time Tracking
+          </div>
+          
+          <h1 className="text-5xl font-black text-slate-900 mb-6 tracking-tight leading-tight">
+            Pantau Perjalanan <br/>
+            <span className="text-blue-600">Cucian Anda</span>
+          </h1>
+          <p className="text-slate-500 text-lg max-w-xl mx-auto font-medium leading-relaxed">
+            Masukkan kode tracking dari struk Anda untuk melihat status terbaru proses laundry secara instan.
+          </p>
         </motion.div>
 
         <form onSubmit={handleSearch} className="flex gap-3 mb-10 max-w-xl mx-auto">
@@ -167,6 +267,69 @@ export default function TrackingPage() {
         </form>
 
         <AnimatePresence mode="wait">
+          {!searched && (
+            <motion.div 
+              key="accents"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="relative h-64 mt-12 pointer-events-none"
+            >
+              {/* Floating Bubbles Accent */}
+              {[...Array(6)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  animate={{ 
+                    y: [0, -40, 0],
+                    x: [0, Math.sin(i) * 20, 0],
+                    scale: [1, 1.1, 1]
+                  }}
+                  transition={{ 
+                    duration: 4 + i, 
+                    repeat: Infinity,
+                    delay: i * 0.5 
+                  }}
+                  className="absolute rounded-full border-2 border-blue-200 bg-white/20 backdrop-blur-sm"
+                  style={{
+                    width: `${20 + (i * 10)}px`,
+                    height: `${20 + (i * 10)}px`,
+                    left: `${15 + (i * 15)}%`,
+                    top: `${20 + (Math.sin(i) * 40)}%`,
+                    opacity: 0.4
+                  }}
+                />
+              ))}
+
+              {/* Decorative Waves at bottom center */}
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-64 h-24 text-blue-100 opacity-40">
+                <Waves size={256} />
+              </div>
+
+              {/* Sparkles scattered */}
+              <motion.div
+                animate={{ opacity: [0.2, 0.6, 0.2] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="absolute left-[30%] top-[60%] text-yellow-400"
+              >
+                <Sparkles size={24} />
+              </motion.div>
+              <motion.div
+                animate={{ opacity: [0.2, 0.6, 0.2] }}
+                transition={{ duration: 2.5, repeat: Infinity, delay: 1 }}
+                className="absolute right-[30%] top-[40%] text-yellow-400"
+              >
+                <Sparkles size={32} />
+              </motion.div>
+
+              {/* Subtle Text Accent */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <p className="text-slate-300 font-black text-7xl opacity-10 select-none tracking-tighter uppercase italic">
+                  Clean & Fresh
+                </p>
+              </div>
+            </motion.div>
+          )}
+
           {searched && !order && !loading && (
             <motion.div 
               key="not-found"
