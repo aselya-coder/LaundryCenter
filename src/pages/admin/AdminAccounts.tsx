@@ -161,7 +161,7 @@ export default function AdminAccounts() {
                 {editingUser ? 'Edit Profil Akun' : 'Tambah Profil Akun'}
               </DialogTitle>
               <DialogDescription className="text-slate-500 font-medium text-sm space-y-4">
-                <p>Silakan buat akun di <strong>Supabase Auth</strong> terlebih dahulu, lalu salin <strong>User ID (UUID)</strong> ke form di bawah ini.</p>
+                <span>Silakan buat akun di <strong>Supabase Auth</strong> terlebih dahulu, lalu salin <strong>User ID (UUID)</strong> ke form di bawah ini.</span>
                 <a 
                   href="https://supabase.com/dashboard/project/_/auth/users" 
                   target="_blank" 
